@@ -1,0 +1,38 @@
+export const DEMO_UPDATES = [
+  {
+    id: "upd-1",
+    title: "Application tracking reminder",
+    description: "Keep your application reference number ready when checking status through JanaSeva Voice.",
+    date: "27 Aug 2026",
+    category: "Applications",
+    read: false,
+    source: "Prototype information",
+  },
+  {
+    id: "upd-2",
+    title: "Scheme discovery tip",
+    description: "Use voice or category selection to explore potentially relevant schemes. Always verify on official sources.",
+    date: "25 Aug 2026",
+    category: "Schemes",
+    read: true,
+    source: "Prototype information",
+  },
+  {
+    id: "upd-3",
+    title: "Complaint registration demo",
+    description: "The complaint flow demonstrates voice-first civic reporting. Production would connect to official problem systems.",
+    date: "22 Aug 2026",
+    category: "Complaints",
+    read: false,
+    source: "Prototype information",
+  },
+  {
+    id: "upd-4",
+    title: "Accessibility features",
+    description: "Larger text, high contrast, and reduced motion options are available in Profile and Accessibility settings.",
+    date: "20 Aug 2026",
+    category: "Accessibility",
+    read: true,
+    source: "Prototype information",
+  },
+];

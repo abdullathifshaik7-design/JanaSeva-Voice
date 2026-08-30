@@ -1,0 +1,34 @@
+# Implementation Tasks
+
+- [x] Create centralized translation dictionary (`src/data/translations.js`) supporting English (`en`), Telugu (`te`), Hindi (`hi`), and Tamil (`ta`).
+- [x] Expose a reactive translation helper `t(key)` and localStorage persistence hook inside `AppContext.jsx`.
+- [x] Update Voice service (`voiceService.js` and `useVoiceAssistant.js`) to use mapped speech codes (`te-IN`, `hi-IN`, `ta-IN`, `en-IN`) and load schemes from localStorage.
+- [x] Update HomePage, SchemesPage, StatusPage, and NearbyHelpPage to call the translation function `t()`.
+- [x] Integrate Central vs State tabs and Indian states selector in SchemesPage.
+- [x] Refactor LanguageSelector options to map short keys (`en`, `te`, `hi`, `ta`).
+- [x] Complete Admin Console CRUD for Schemes/Services, lists filters, sort parameters, and form validation checks.
+- [x] Implement demo credentials validation form to unlock Admin Console navigation.
+- [x] Expand registry support for 13 major Indian languages (English, Telugu, Hindi, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese, Urdu).
+- [x] Integrate HTML5 Geolocation API with Haversine distance calculations and directions links in voice search output.
+- [x] Design dialogue context extraction (State, Age, Occupation, Ration Card Status) from conversational inputs.
+- [x] Implement dynamic UI indicators for Voice states (Listening, Geolocation query, processing, responding).
+- [x] Write native browser SpeechRecognition (`window.SpeechRecognition || window.webkitSpeechRecognition`) lifecycle wrapper supporting interim transcripts, permission checks, and detailed error mapping.
+- [x] Build working citizen complaints / grievances registration form and status timeline tracker (`ComplaintsPage.jsx`).
+- [x] Link complaints and feedback databases directly to Admin Console tab views.
+- [x] Integrate official Senior Citizen Support Helpline 14567 to Home, Senior dashboard, and Help pages.
+- [x] Connect database layers directly to remote **Supabase PostgreSQL** tables (schemes, services, complaints, applications, feedbacks) with automatic seeding.
+- [x] Setup secure backend endpoint logic for **Google Cloud Speech-to-Text** (STT), **Text-to-Speech** (TTS), and **Translation** API processes (offline fallbacks integrated).
+- [x] Create and style high-resolution custom brand SVG `<Logo />` mounted in headers, navbars, logins, and browser favicons.
+- [x] Build full localization system across all 13 supported languages.
+- [x] Enable automatic dynamic RTL direction layouts for Urdu language.
+- [x] Simplify brand logo to a professional geometric layout.
+- [x] Integrate Supabase Authentication and Guest bypass flows.
+- [x] Add AI Document Upload widget & Form fill assistant with TTS guides.
+- [x] Build conversational helpline simulation mode inside VoicePage.
+- [x] Redesign Admin Console into a professional dashboard catalog.
+- [x] Enable 100% complete UI translation matching all 13 languages.
+- [x] Clean up all occurrences of the word "Grievance" from citizen views.
+- [x] Build standalone Documents Center with device camera capturing and form assistant helpers.
+- [x] Restructure My Profile card to hold comprehensive demographics and history tabs.
+- [x] Build dedicated Settings page housing accessibility sliders and login states.
+- [x] Verify project builds clean.

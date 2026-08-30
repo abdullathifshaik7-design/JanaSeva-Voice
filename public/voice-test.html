@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Test - Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .mic-button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: background 0.3s;
+        }
+        .mic-button:hover {
+            background: #0284c7;
+        }
+        .mic-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .mic-button.recording {
+            background: #dc2626;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .status-item {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e2e8f0;
+        }
+        .status-label {
+            font-weight: bold;
+            color: #64748b;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        .status-value {
+            font-size: 16px;
+            color: #1e293b;
+            word-break: break-all;
+        }
+        .status-value.error {
+            color: #dc2626;
+        }
+        .status-value.success {
+            color: #16a34a;
+        }
+        .transcript-box {
+            background: #f0fdf4;
+            border: 2px solid #16a34a;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            min-height: 80px;
+        }
+        .transcript-label {
+            font-weight: bold;
+            color: #16a34a;
+            margin-bottom: 10px;
+        }
+        .transcript-text {
+            font-size: 18px;
+            color: #1e293b;
+        }
+        .language-selector {
+            margin: 20px 0;
+        }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        .console-log {
+            background: #1e293b;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Recognition Test (Isolated)</h1>
+        
+        <div class="language-selector">
+            <label for="language">Select Language: </label>
+            <select id="language">
+                <option value="en-IN">English (en-IN)</option>
+                <option value="te-IN">Telugu (te-IN)</option>
+                <option value="hi-IN">Hindi (hi-IN)</option>
+                <option value="ta-IN">Tamil (ta-IN)</option>
+            </select>
+        </div>
+
+        <button id="micButton" class="mic-button">🎤 Start Recording</button>
+
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">MIC STATUS</div>
+                <div class="status-value" id="micStatus">Idle</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">AUDIO SIZE</div>
+                <div class="status-value" id="audioSize">0 bytes</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">MIME TYPE</div>
+                <div class="status-value" id="mimeType">-</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">STT STATUS</div>
+                <div class="status-value" id="sttStatus">-</div>
+            </div>
+        </div>
+
+        <div class="transcript-box">
+            <div class="transcript-label">TRANSCRIPT:</div>
+            <div class="transcript-text" id="transcript">No transcript yet</div>
+        </div>
+
+        <div class="status-item">
+            <div class="status-label">ERROR:</div>
+            <div class="status-value" id="error">None</div>
+        </div>
+
+        <div class="console-log" id="consoleLog">
+            <div class="log-entry"><span class="log-time">[System]</span> Ready for testing</div>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let silenceDetection = null;
+        let recordingTimeout = null;
+        let isRecording = false;
+
+        // DOM elements
+        const micButton = document.getElementById('micButton');
+        const languageSelect = document.getElementById('language');
+        const micStatus = document.getElementById('micStatus');
+        const audioSize = document.getElementById('audioSize');
+        const mimeType = document.getElementById('mimeType');
+        const sttStatus = document.getElementById('sttStatus');
+        const transcript = document.getElementById('transcript');
+        const error = document.getElementById('error');
+        const consoleLog = document.getElementById('consoleLog');
+
+        // Logging function
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            consoleLog.appendChild(logEntry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+            console.log(`[VoiceTest] ${message}`);
+        }
+
+        // Update status displays
+        function updateStatus(element, value, type = '') {
+            element.textContent = value;
+            element.className = 'status-value ' + type;
+        }
+
+
+
+        // Start recording
+        async function startRecording() {
+            try {
+                log('Requesting microphone access...', 'info');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                log('Microphone access granted', 'success');
+
+                audioChunks = [];
+                isRecording = true;
+
+                // Determine MIME type
+                let mimeType = 'audio/webm';
+                if (!MediaRecorder.isTypeSupported('audio/webm')) {
+                    if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                        mimeType = 'audio/mp4';
+                    } else {
+                        mimeType = 'audio/ogg';
+                    }
+                }
+                log(`Using MIME type: ${mimeType}`, 'info');
+
+                // Create MediaRecorder
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    log('Recording stopped, processing audio...', 'info');
+                    isRecording = false;
+                    
+                    // Clear detection and timeouts
+                    if (silenceDetection) {
+                        cancelAnimationFrame(silenceDetection);
+                        silenceDetection = null;
+                    }
+                    if (recordingTimeout) {
+                        clearTimeout(recordingTimeout);
+                        recordingTimeout = null;
+                    }
+
+                    // Update UI
+                    updateStatus(micStatus, 'Processing', '');
+                    micButton.disabled = false;
+                    micButton.textContent = '🎤 Start Recording';
+                    micButton.classList.remove('recording');
+
+                    // Process audio
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    updateStatus(audioSize, `${audioBlob.size} bytes`, '');
+                    updateStatus(document.getElementById('mimeType'), mimeType, '');
+
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Send to STT
+                    await sendToSTT(audioBlob, mimeType);
+                };
+
+                // Start recording
+                mediaRecorder.start();
+                log('Recording started', 'success');
+                updateStatus(micStatus, 'Recording', 'success');
+                micButton.textContent = '⏹️ Stop Recording';
+                micButton.classList.add('recording');
+
+            } catch (err) {
+                log(`Microphone access failed: ${err.name} - ${err.message}`, 'error');
+                updateStatus(micStatus, 'Failed', 'error');
+                updateStatus(error, `${err.name}: ${err.message}`, 'error');
+                isRecording = false;
+                micButton.disabled = false;
+            }
+        }
+
+        // Stop recording
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        }
+
+        // Send audio to STT API
+        async function sendToSTT(audioBlob, mimeType) {
+            try {
+                log('Converting audio to base64...', 'info');
+                const reader = new FileReader();
+                reader.readAsDataURL(audioBlob);
+                
+                reader.onloadend = async () => {
+                    try {
+                        const base64Audio = reader.result.split(',')[1];
+                        const languageCode = languageSelect.value;
+                        
+                        log(`Sending to /api/stt with language: ${languageCode}`, 'info');
+                        log(`Audio size: ${base64Audio.length} characters`, 'info');
+
+                        updateStatus(sttStatus, 'Sending...', '');
+
+                        const response = await fetch('/api/stt', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                audioContent: base64Audio,
+                                languageCode: languageCode
+                            })
+                        });
+
+                        log(`STT HTTP Status: ${response.status}`, 'info');
+                        updateStatus(sttStatus, `${response.status}`, response.ok ? 'success' : 'error');
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            log(`STT Error Response: ${errorText}`, 'error');
+                            updateStatus(error, `HTTP ${response.status}: ${errorText}`, 'error');
+                            return;
+                        }
+
+                        const data = await response.json();
+                        log(`STT Response received`, 'success');
+                        log(`Response keys: ${Object.keys(data).join(', ')}`, 'info');
+
+                        if (data.error) {
+                            log(`STT API Error: ${data.error}`, 'error');
+                            updateStatus(error, data.error, 'error');
+                            updateStatus(transcript, 'Error in transcription', 'error');
+                        } else if (data.transcript) {
+                            log(`Transcript received: "${data.transcript}"`, 'success');
+                            updateStatus(transcript, data.transcript, 'success');
+                            updateStatus(error, 'None', '');
+                        } else {
+                            log('No transcript in response', 'error');
+                            updateStatus(error, 'No transcript returned', 'error');
+                        }
+
+                        updateStatus(micStatus, 'Idle', '');
+
+                    } catch (err) {
+                        log(`STT Request Failed: ${err.message}`, 'error');
+                        updateStatus(sttStatus, 'Failed', 'error');
+                        updateStatus(error, `Request failed: ${err.message}`, 'error');
+                        updateStatus(micStatus, 'Idle', '');
+                    }
+                };
+
+                reader.onerror = () => {
+                    log('Failed to read audio blob', 'error');
+                    updateStatus(error, 'Failed to read audio blob', 'error');
+                    updateStatus(micStatus, 'Idle', '');
+                };
+
+            } catch (err) {
+                log(`Audio processing failed: ${err.message}`, 'error');
+                updateStatus(error, `Processing failed: ${err.message}`, 'error');
+                updateStatus(micStatus, 'Idle', '');
+            }
+        }
+
+        // Event listeners
+        micButton.addEventListener('click', () => {
+            if (isRecording) {
+                log('Manual stop requested', 'info');
+                stopRecording();
+            } else {
+                log('Start recording requested', 'info');
+                startRecording();
+            }
+        });
+
+        // Initialize
+        log('Voice test page loaded', 'success');
+    </script>
+</body>
+</html>
