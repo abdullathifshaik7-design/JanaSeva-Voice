@@ -23,6 +23,11 @@ export function useVoiceAssistant() {
   const accumulatedTranscriptRef = useRef("");
   const languageRef = useRef(language);
 
+  // Timers for silence and safety checks
+  const silenceTimerRef = useRef(null);
+  const safetyTimerRef = useRef(null);
+  const speechDetectedRef = useRef(false);
+
   // Sync language ref to prevent stale closures
   useEffect(() => {
     languageRef.current = language;
@@ -34,15 +39,11 @@ export function useVoiceAssistant() {
     setState(VOICE_STATES.PROCESSING);
     try {
       const result = await processVoiceRequest(text, activeLang);
-      const outputLang = result.detectedLanguage || activeLang;
+      const outputLang = activeLang; // Force responses to use the selected language directly
       
       console.log("VOICE DEBUG: assistant response received. Detected lang:", result.detectedLanguage, "requiresLoc:", result.requiresLocation);
-      if (result.detectedLanguage && result.detectedLanguage !== activeLang) {
-        setLanguage(result.detectedLanguage);
-      }
-
+      
       if (result.requiresLocation) {
-        // Location search
         setState(VOICE_STATES.FINDING_LOCATION);
         if (!navigator.geolocation) {
           setError("Geolocation is not supported by your browser.");
@@ -81,13 +82,21 @@ export function useVoiceAssistant() {
       setError("Voice input had a temporary problem. Please try again.");
       setState(VOICE_STATES.READY);
     }
-  }, [setLanguage]);
+  }, []);
 
   // Clean stop/cleanup helper
   const cleanupRecognition = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+
     if (recognitionRef.current) {
       try {
-        // Remove event handlers to prevent secondary triggers
         recognitionRef.current.onstart = null;
         recognitionRef.current.onerror = null;
         recognitionRef.current.onresult = null;
@@ -131,6 +140,7 @@ export function useVoiceAssistant() {
     // Toggle off if listening
     if (isListeningRef.current) {
       cleanupRecognition();
+      setState(VOICE_STATES.READY);
       return;
     }
 
@@ -139,11 +149,16 @@ export function useVoiceAssistant() {
       return;
     }
 
+    // Reset status flags and timers
     setError(null);
     setTranscript("");
     setResponse("");
     setLocationResults([]);
     accumulatedTranscriptRef.current = "";
+    speechDetectedRef.current = false;
+
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
 
     const reg = LANGUAGES_REGISTRY.find(item => item.code === languageRef.current);
     const langCode = reg ? reg.speechRecognitionCode : "en-IN";
@@ -165,7 +180,7 @@ export function useVoiceAssistant() {
       recognition.onstart = () => {
         isListeningRef.current = true;
         setState(VOICE_STATES.LISTENING);
-        console.log("Recognition started");
+        console.log(`[VOICE] Started: ${langCode}`);
       };
 
       recognition.onerror = (event) => {
@@ -197,7 +212,21 @@ export function useVoiceAssistant() {
         
         if (display) {
           setTranscript(display);
-          console.log(`Recognition result: "${display}"`);
+          console.log(`[VOICE] Result: ${display}`);
+
+          if (!speechDetectedRef.current && display.trim().length > 0) {
+            speechDetectedRef.current = true;
+            console.log(`[VOICE] Speech detected`);
+          }
+
+          // Restart silence timer if speech has started
+          if (speechDetectedRef.current) {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = setTimeout(() => {
+              console.log(`[VOICE] Silence detected — stopping`);
+              recognition.stop();
+            }, 1800); // Stop after 1.8 seconds of silence after speaking has started
+          }
         }
 
         if (finalTranscript) {
@@ -208,16 +237,25 @@ export function useVoiceAssistant() {
       recognition.onend = async () => {
         console.log("Recognition ended callback");
         const finalResult = accumulatedTranscriptRef.current.trim();
+        
         cleanupRecognition();
         
+        console.log(`[VOICE] Final transcript: ${finalResult}`);
+        console.log(`[VOICE] Response language: ${languageRef.current}`);
+
         if (!finalResult) {
           setState(VOICE_STATES.READY);
           return;
         }
 
-        console.log(`Final transcript: "${finalResult}"`);
         await handleFinalSpeechText(finalResult, languageRef.current);
       };
+
+      // Set a maximum safety timeout of 15 seconds
+      safetyTimerRef.current = setTimeout(() => {
+        console.log("VOICE DEBUG: Max safety timeout (15s) reached — stopping");
+        recognition.stop();
+      }, 15000);
 
       recognition.start();
     } catch (err) {
