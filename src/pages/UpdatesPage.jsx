@@ -5,7 +5,7 @@ import { Volume2, Landmark, CheckCircle, ExternalLink, X, AlertCircle } from "lu
 import DemoNote from "../components/DemoNote";
 
 export default function UpdatesPage() {
-  const { userProfile, schemes, addApplication, user, t, t_db } = useApp();
+  const { userProfile, schemes, addApplication, user, t, t_db, setPage, setActiveScheme } = useApp();
   const [selectedScheme, setSelectedScheme] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [successApplyMsg, setSuccessApplyMsg] = useState("");
@@ -44,22 +44,8 @@ export default function UpdatesPage() {
   };
 
   const handleApplyDemo = (scheme) => {
-    const refId = `JSV-APP-${Math.floor(100000 + Math.random() * 900000)}`;
-    addApplication({
-      id: refId,
-      schemeId: scheme.id,
-      schemeName: scheme.name,
-      citizenName: user?.email || user?.phone || "Guest User",
-      status: "Submitted",
-      date: new Date().toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }),
-      timeline: [
-        { title: "Application Submitted", done: true, current: true, date: "Today" },
-        { title: "Document Verification", done: false, current: false, date: "Pending" },
-        { title: "Sanction Status", done: false, current: false, date: "Pending" }
-      ]
-    });
-    setSuccessApplyMsg(`Applied successfully! Reference ID: ${refId}. You can track status on the Application Status tab.`);
-    setTimeout(() => setSuccessApplyMsg(""), 5000);
+    setActiveScheme(scheme);
+    setPage("schemes");
   };
 
   return (

@@ -278,7 +278,7 @@
                 };
 
                 // Start recording
-                mediaRecorder.start();
+                mediaRecorder.start(250);
                 log('Recording started', 'success');
                 updateStatus(micStatus, 'Recording', 'success');
                 micButton.textContent = '⏹️ Stop Recording';

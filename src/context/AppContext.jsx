@@ -32,6 +32,7 @@ const INITIAL_COMPLAINTS = [
 
 export function AppProvider({ children }) {
   const [page, setPage] = useState("home");
+  const [activeScheme, setActiveScheme] = useState(null);
   const [user, setUserState] = useState(() => {
     try {
       const saved = localStorage.getItem("janaseva_user");
@@ -371,6 +372,8 @@ export function AppProvider({ children }) {
   const value = {
     page,
     setPage,
+    activeScheme,
+    setActiveScheme,
     user,
     setUser,
     isGuest,

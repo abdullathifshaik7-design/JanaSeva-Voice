@@ -94,7 +94,6 @@ const localApiPlugin = () => ({
 
             try {
               const audioBuffer = Buffer.from(audioContent, "base64");
-              const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
               
               // Map language codes to Whisper ISO-639-1 format
               const languageMap = {
@@ -109,30 +108,17 @@ const localApiPlugin = () => ({
               };
               const whisperLanguage = languageMap[languageCode] || 'en';
               
+              console.log("[STT Request] Received audio bytes:", audioBuffer.length);
+              console.log("[STT Request] Content type: audio/webm");
               console.log("[STT Request] Language mapping:", languageCode, "->", whisperLanguage);
-              
-              // Build proper multipart form data with language parameter
-              const parts = [];
-              
-              // Add model field
-              parts.push(`--${boundary}\r\n`);
-              parts.push(`Content-Disposition: form-data; name="model"\r\n\r\n`);
-              parts.push(`${modelName}\r\n`);
-              
-              // Add language field
-              parts.push(`--${boundary}\r\n`);
-              parts.push(`Content-Disposition: form-data; name="language"\r\n\r\n`);
-              parts.push(`${whisperLanguage}\r\n`);
-              
-              // Add file field
-              parts.push(`--${boundary}\r\n`);
-              parts.push(`Content-Disposition: form-data; name="file"; filename="audio.webm"\r\n`);
-              parts.push(`Content-Type: audio/webm\r\n\r\n`);
-              
-              const formDataHeader = Buffer.concat(parts.map(p => Buffer.from(p)));
-              const formDataFooter = Buffer.from(`\r\n--${boundary}--\r\n`);
-              
-              const body = Buffer.concat([formDataHeader, audioBuffer, formDataFooter]);
+
+              const formData = new FormData();
+              const audioBlob = new Blob([audioBuffer], { type: "audio/webm" });
+              formData.append("file", audioBlob, "audio.webm");
+              formData.append("model", modelName);
+              formData.append("language", whisperLanguage);
+              formData.append("temperature", "0");
+              formData.append("response_format", "json");
 
               // Add timeout to the fetch call
               const controller = new AbortController();
@@ -141,16 +127,17 @@ const localApiPlugin = () => ({
               const response = await fetch(sttUrl, {
                 method: "POST",
                 headers: {
-                  "Authorization": `Bearer ${activeKey}`,
-                  "Content-Type": `multipart/form-data; boundary=${boundary}`
+                  "Authorization": `Bearer ${activeKey}`
                 },
-                body: body,
+                body: formData,
                 signal: controller.signal
               });
               
               clearTimeout(timeout);
+              console.log("[STT Response] Whisper HTTP status:", response.status);
 
               const data = await response.json();
+              console.log("[STT Response] Returned transcript:", data.text || "");
               if (data.error) {
                 res.statusCode = 400;
                 return res.end(JSON.stringify({ error: data.error.message || JSON.stringify(data.error) }));

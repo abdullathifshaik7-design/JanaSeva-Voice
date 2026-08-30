@@ -1,5 +1,6 @@
 import { STATES, SERVICE_CENTERS } from "../data/db";
 import { LANGUAGES_REGISTRY, TRANSLATIONS } from "../data/translations";
+import { getTranslatedDbText } from "../data/dbTranslations";
 
 export const VOICE_STATES = {
   READY: "ready",
@@ -222,15 +223,15 @@ export function generateDialogResponse(transcript, currentLanguage) {
 
     let recommended = [];
 
-    // Filter from mock/db schemes
+    // Filter from mock/db schemes with local translation
     if (isStudent) {
       recommended.push({
-        name: "Post Matric Scholarship Scheme",
-        why: "Provides financial aid for college students post 10th grade.",
-        benefits: "100% tuition fee reimbursement and a monthly allowance of up to ₹1,200.",
-        eligibility: "SC/ST/OBC students with family income under ₹2.5 Lakhs.",
-        docs: "Aadhaar Card, Caste Certificate, Income Certificate, Marks List",
-        process: "Register online on the National Scholarship Portal (scholarships.gov.in) and upload certificates.",
+        name: getTranslatedDbText("post-matric-scholarship", "name", "Post Matric Scholarship Scheme", lang),
+        why: getTranslatedDbText("post-matric-scholarship", "description", "Provides financial aid for college students post 10th grade.", lang),
+        benefits: getTranslatedDbText("post-matric-scholarship", "benefits", "100% tuition fee reimbursement and a monthly allowance of up to ₹1,200.", lang),
+        eligibility: getTranslatedDbText("post-matric-scholarship", "eligibility", "SC/ST/OBC students with family income under ₹2.5 Lakhs.", lang),
+        docs: getTranslatedDbText("post-matric-scholarship", "requiredDocuments", "Aadhaar Card, Caste Certificate, Income Certificate, Marks List", lang),
+        process: getTranslatedDbText("post-matric-scholarship", "applicationSteps", "Register online on the National Scholarship Portal (scholarships.gov.in) and upload certificates.", lang),
         website: "https://scholarships.gov.in",
         helpline: "0120-6619540"
       });
@@ -238,24 +239,24 @@ export function generateDialogResponse(transcript, currentLanguage) {
 
     if (isFarmer) {
       recommended.push({
-        name: "PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)",
-        why: "Central government direct income support for farmers.",
-        benefits: "₹6,000 per year, sent directly in three equal installments of ₹2,000 every 4 months.",
-        eligibility: "Landowning farmer families with cultivable land in their name.",
-        docs: "Aadhaar Card, Land Passbook/Records, Bank Details",
-        process: "Apply online at pmkisan.gov.in or visit your local citizen center.",
+        name: getTranslatedDbText("pm-kisan", "name", "PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)", lang),
+        why: getTranslatedDbText("pm-kisan", "description", "Central government direct income support for farmers.", lang),
+        benefits: getTranslatedDbText("pm-kisan", "benefits", "₹6,000 per year, sent directly in three equal installments of ₹2,000 every 4 months.", lang),
+        eligibility: getTranslatedDbText("pm-kisan", "eligibility", "Landowning farmer families with cultivable land in their name.", lang),
+        docs: getTranslatedDbText("pm-kisan", "requiredDocuments", "Aadhaar Card, Land Passbook/Records, Bank Details", lang),
+        process: getTranslatedDbText("pm-kisan", "applicationSteps", "Apply online at pmkisan.gov.in or visit your local citizen center.", lang),
         website: "https://pmkisan.gov.in",
         helpline: "155261"
       });
 
       if (conversationContext.state === "Andhra Pradesh") {
         recommended.push({
-          name: "YSR Rythu Bharosa (AP)",
-          why: "Andhra Pradesh state scheme combining crop investment support.",
-          benefits: "₹13,500 per year (including tenant farmers).",
-          eligibility: "Landowners or registered tenant farmers in AP.",
-          docs: "Aadhaar, Land records, Bank Details",
-          process: "Submit details at the local Rythu Bharosa Kendra (RBK).",
+          name: getTranslatedDbText("ap-rythu-bharosa", "name", "YSR Rythu Bharosa (AP)", lang),
+          why: getTranslatedDbText("ap-rythu-bharosa", "description", "Andhra Pradesh state scheme combining crop investment support.", lang),
+          benefits: getTranslatedDbText("ap-rythu-bharosa", "benefits", "₹13,500 per year (including tenant farmers).", lang),
+          eligibility: getTranslatedDbText("ap-rythu-bharosa", "eligibility", "Landowners or registered tenant farmers in AP.", lang),
+          docs: getTranslatedDbText("ap-rythu-bharosa", "requiredDocuments", "Aadhaar, Land records, Bank Details", lang),
+          process: getTranslatedDbText("ap-rythu-bharosa", "applicationSteps", "Submit details at the local Rythu Bharosa Kendra (RBK).", lang),
           website: "https://ysrrythubharosa.ap.gov.in",
           helpline: "1902"
         });
@@ -264,24 +265,24 @@ export function generateDialogResponse(transcript, currentLanguage) {
 
     if (isSenior) {
       recommended.push({
-        name: "IGNOAPS (Indira Gandhi National Old Age Pension)",
-        why: "National monthly pension scheme for senior citizens.",
-        benefits: "Monthly cash assistance directly into bank account.",
-        eligibility: "Aged 60+ from Below Poverty Line (BPL) households.",
-        docs: "Aadhaar, BPL Ration Card, Bank Passbook",
-        process: "Submit physical form to Gram Panchayat or Block Development Officer (BDO).",
+        name: getTranslatedDbText("old-age-pension-national", "name", "IGNOAPS (Indira Gandhi National Old Age Pension)", lang),
+        why: getTranslatedDbText("old-age-pension-national", "description", "National monthly pension scheme for senior citizens.", lang),
+        benefits: getTranslatedDbText("old-age-pension-national", "benefits", "Monthly cash assistance directly into bank account.", lang),
+        eligibility: getTranslatedDbText("old-age-pension-national", "eligibility", "Aged 60+ from Below Poverty Line (BPL) households.", lang),
+        docs: getTranslatedDbText("old-age-pension-national", "requiredDocuments", "Aadhaar, BPL Ration Card, Bank Passbook", lang),
+        process: getTranslatedDbText("old-age-pension-national", "applicationSteps", "Submit physical form to Gram Panchayat or Block Development Officer (BDO).", lang),
         website: "https://nsap.nic.in",
         helpline: "1800-11-1902"
       });
 
       if (conversationContext.state === "Andhra Pradesh") {
         recommended.push({
-          name: "NTR Bharosa Pension Scheme (AP)",
-          why: "State pension delivered directly to your doorstep.",
-          benefits: "₹4,000 per month for senior citizens.",
-          eligibility: "Resident of Andhra Pradesh, age 60+, white ration card holder.",
-          docs: "Aadhaar, White Ration Card, Age proof",
-          process: "Register at Village/Ward Sachivalayam; volunteer delivers cash on the 1st of every month.",
+          name: getTranslatedDbText("ybr-ntr-pension-ap", "name", "NTR Bharosa Pension Scheme (AP)", lang),
+          why: getTranslatedDbText("ybr-ntr-pension-ap", "description", "State pension delivered directly to your doorstep.", lang),
+          benefits: getTranslatedDbText("ybr-ntr-pension-ap", "benefits", "₹4,000 per month for senior citizens.", lang),
+          eligibility: getTranslatedDbText("ybr-ntr-pension-ap", "eligibility", "Resident of Andhra Pradesh, age 60+, white ration card holder.", lang),
+          docs: getTranslatedDbText("ybr-ntr-pension-ap", "requiredDocuments", "Aadhaar, White Ration Card, Age proof", lang),
+          process: getTranslatedDbText("ybr-ntr-pension-ap", "applicationSteps", "Register at Village/Ward Sachivalayam; volunteer delivers cash on the 1st of every month.", lang),
           website: "https://sspensions.ap.gov.in",
           helpline: "1902"
         });
@@ -290,23 +291,67 @@ export function generateDialogResponse(transcript, currentLanguage) {
 
     if (isWorker) {
       recommended.push({
-        name: "MGNREGA Job Card",
-        why: "Guarantees 100 days of unskilled manual labor work.",
-        benefits: "Paid employment weekly direct to your bank account.",
-        eligibility: "Rural adults willing to do unskilled manual work.",
-        docs: "Aadhaar Card, Ration Card, Photo",
-        process: "Apply orally or in writing at the local Gram Panchayat office.",
+        name: getTranslatedDbText("mgnrega-jobseeker", "name", "MGNREGA Job Card", lang),
+        why: getTranslatedDbText("mgnrega-jobseeker", "description", "Guarantees 100 days of unskilled manual labor work.", lang),
+        benefits: getTranslatedDbText("mgnrega-jobseeker", "benefits", "Paid employment weekly direct to your bank account.", lang),
+        eligibility: getTranslatedDbText("mgnrega-jobseeker", "eligibility", "Rural adults willing to do unskilled manual work.", lang),
+        docs: getTranslatedDbText("mgnrega-jobseeker", "requiredDocuments", "Aadhaar Card, Ration Card, Photo", lang),
+        process: getTranslatedDbText("mgnrega-jobseeker", "applicationSteps", "Apply orally or in writing at the local Gram Panchayat office.", lang),
         website: "https://nrega.nic.in",
         helpline: "1800-11-1555"
       });
     }
 
     if (recommended.length > 0) {
-      // Build detailed structured text response
-      let respText = `Based on your profile as a ${conversationContext.occupation} in ${conversationContext.state || 'India'}, here are the relevant schemes:\n\n`;
+      // Localized template maps for output building
+      const templateMap = {
+        en: {
+          intro: (occ, state) => `Based on your profile as a ${occ} in ${state || 'India'}, here are the relevant schemes:\n\n`,
+          why: "Why it applies",
+          benefits: "Benefits",
+          eligibility: "Eligibility",
+          docs: "Documents required",
+          process: "Application process",
+          website: "Official Website",
+          helpline: "Helpline"
+        },
+        te: {
+          intro: (occ, state) => `${state || 'భారతదేశం'}లో ${occ === 'farmer' ? 'రైతు' : occ === 'student' ? 'విద్యార్థి' : occ === 'senior' ? 'వృద్ధులు' : occ}గా మీ ప్రొఫైల్ ఆధారంగా, మీకు సరిపోయే పథకాలు ఇక్కడ ఉన్నాయి:\n\n`,
+          why: "ఎందుకు సరిపోతుంది",
+          benefits: "ప్రయోజనాలు",
+          eligibility: "అర్హత",
+          docs: "కావలసిన పత్రాలు",
+          process: "దరఖాస్తు విధానం",
+          website: "అధికారిక వెబ్‌సైట్",
+          helpline: "హెల్ప్‌లైన్"
+        },
+        hi: {
+          intro: (occ, state) => `${state || 'भारत'} में ${occ === 'farmer' ? 'किसान' : occ === 'student' ? 'छात्र' : occ === 'senior' ? 'वरिष्ठ नागरिक' : occ} के रूप में आपकी प्रोफाइल के आधार पर, प्रासंगिक योजनाएं नीचे दी गई हैं:\n\n`,
+          why: "यह क्यों लागू होता है",
+          benefits: "लाभ",
+          eligibility: "पात्रता",
+          docs: "आवश्यक दस्तावेज",
+          process: "आवेदन प्रक्रिया",
+          website: "आधिकारिक वेबसाइट",
+          helpline: "हेल्पलाइन"
+        },
+        ta: {
+          intro: (occ, state) => `${state || 'இந்தியா'}வில் ${occ === 'farmer' ? 'விவசாயி' : occ === 'student' ? 'மாணவர்' : occ === 'senior' ? 'முதியவர்' : occ} என்ற உங்கள் சுயவிவரத்தின் அடிப்படையில், பொருத்தமான திட்டங்கள் இதோ:\n\n`,
+          why: "ஏன் பொருந்துகிறது",
+          benefits: "பலன்கள்",
+          eligibility: "தகுதி",
+          docs: "தேவையான ஆவணங்கள்",
+          process: "விண்ணப்பிக்கும் முறை",
+          website: "அதிகாரப்பூர்வ இணையதளம்",
+          helpline: "உதவி எண்"
+        }
+      };
+
+      const tpl = templateMap[lang] || templateMap.en;
+      let respText = tpl.intro(conversationContext.occupation, conversationContext.state);
       
       recommended.forEach((s, idx) => {
-        respText += `${idx + 1}. ${s.name}\n- Why it applies: ${s.why}\n- Benefits: ${s.benefits}\n- Eligibility: ${s.eligibility}\n- Documents required: ${s.docs}\n- Application process: ${s.process}\n- Official Website: ${s.website}\n- Helpline: ${s.helpline}\n\n`;
+        respText += `${idx + 1}. ${s.name}\n- ${tpl.why}: ${s.why}\n- ${tpl.benefits}: ${s.benefits}\n- ${tpl.eligibility}: ${s.eligibility}\n- ${tpl.docs}: ${s.docs}\n- ${tpl.process}: ${s.process}\n- ${tpl.website}: ${s.website}\n- ${tpl.helpline}: ${s.helpline}\n\n`;
       });
       
       return {
@@ -414,26 +459,30 @@ export async function processVoiceRequest(transcript, language) {
     const englishTranscript = await translateText(transcript, detectedLang, "en");
     console.log(`[VoiceService] English normalized transcript: "${englishTranscript}"`);
 
-    // 2. Generate response in English via local dialog engine
-    const result = generateDialogResponse(englishTranscript, "en");
+    // 2. Generate response via local dialog engine with the target language!
+    const result = generateDialogResponse(englishTranscript, detectedLang);
 
-    // 3. Translate response back to user's native tongue
-    const localizedResponse = await translateText(result.response, "en", detectedLang);
-    console.log(`[VoiceService] Localized response back: "${localizedResponse}"`);
+    // If result.language is already translated locally, we use it directly!
+    // Otherwise, we translate it using API
+    let finalResponse = result.response;
+    if (result.language !== detectedLang) {
+      finalResponse = await translateText(result.response, "en", detectedLang);
+    }
+    console.log(`[VoiceService] Final response: "${finalResponse}"`);
 
     return {
       transcript,
-      response: localizedResponse,
+      response: finalResponse,
       detectedLanguage: detectedLang,
       category: result.category,
       requiresLocation: result.requiresLocation || false,
       isDemo: false,
-      source: "Google Translation API + Localized Dialog Engine"
+      source: "Local Translations + Localized Dialog Engine"
     };
   } catch (err) {
     console.warn("[VoiceService] Translation pipeline fallback triggered:", err);
     // Hardcoded local fallbacks
-    const result = generateDialogResponse(transcript, language);
+    const result = generateDialogResponse(transcript, detectedLang);
     return {
       transcript,
       response: result.response,

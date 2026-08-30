@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Sparkles, Volume2, BookOpen, ExternalLink, ShieldAlert, X, Upload, CheckCircle, Play, Eye } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Volume2, BookOpen, ExternalLink, ShieldAlert, X, Upload, CheckCircle, Play, Eye, ArrowRight, ArrowLeft } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { CATEGORIES, STATES } from "../data/db";
 import { speakText } from "../services/voiceService";
@@ -26,11 +26,21 @@ export default function SchemesPage() {
     setCategoryFilter: setActiveCategory,
     schemes,
     t,
-    user
+    user,
+    activeScheme,
+    setActiveScheme
   } = useApp();
 
   const [selectedScheme, setSelectedScheme] = useState(null);
   const [activeTab, setActiveTab] = useState("central"); // "central", "state", "recommended"
+
+  useEffect(() => {
+    if (activeScheme) {
+      setSelectedScheme(activeScheme);
+      setApplyStep("form"); // Go directly to the apply form!
+      setActiveScheme(null); // Clear context reference
+    }
+  }, [activeScheme, schemes]);
   
   // Profile Wizard states
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -45,13 +55,27 @@ export default function SchemesPage() {
   const [matchedSchemes, setMatchedSchemes] = useState([]);
   const [showMatches, setShowMatches] = useState(false);
 
-  // AI Document Assistant states
-  const [showAssistant, setShowAssistant] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [docDetectionType, setDocDetectionType] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showFormGuide, setShowFormGuide] = useState(false);
-  const [isGuideSpeaking, setIsGuideSpeaking] = useState(false);
+  // Apply Form states
+  const [applyStep, setApplyStep] = useState("details"); // "details", "form", "review", "success"
+  const [applyFormData, setApplyFormData] = useState({
+    fullName: "",
+    mobile: "",
+    village: "",
+    district: "",
+    landDetails: "",
+    cropDetails: "",
+    age: "",
+    address: "",
+    pensionType: "",
+    studentName: "",
+    dob: "",
+    educationLevel: "",
+    institution: "",
+    course: "",
+    income: "",
+    generalDetail: ""
+  });
+  const [generatedRef, setGeneratedRef] = useState("");
 
   // Filter schemes
   const tabFilteredSchemes = schemes.filter(s => {
@@ -108,68 +132,19 @@ export default function SchemesPage() {
     const simpleText = scheme.simpleExplanation[langCode] || scheme.simpleExplanation.en || scheme.benefits;
     speakText(simpleText, language);
   };
+  const handleApplyFormSubmit = (scheme) => {
+    const refId = `JSV-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+    setGeneratedRef(refId);
 
-  // Mock document scanning detection
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const citizenNameVal = scheme.category === "education" 
+      ? applyFormData.studentName 
+      : applyFormData.fullName || user?.email || user?.phone || "Guest User";
 
-    setIsAnalyzing(true);
-    setUploadedFile(file);
-    setShowFormGuide(false);
-
-    setTimeout(() => {
-      const fileNameLower = file.name.toLowerCase();
-      let detected = "Aadhaar Card"; // default
-
-      if (fileNameLower.includes("pan")) {
-        detected = "PAN Card";
-      } else if (fileNameLower.includes("income")) {
-        detected = "Income Certificate";
-      } else if (fileNameLower.includes("caste")) {
-        detected = "Caste Certificate";
-      } else if (fileNameLower.includes("patta") || fileNameLower.includes("land")) {
-        detected = "Land Patta Document";
-      } else if (fileNameLower.includes("ration")) {
-        detected = "Ration Card";
-      } else {
-        // Fallback to the first required document of selected scheme
-        detected = selectedScheme?.requiredDocuments?.[0] || "Aadhaar Card";
-      }
-
-      setDocDetectionType(detected);
-      setIsAnalyzing(false);
-    }, 1500);
-  };
-
-  // Speech guidance voice player
-  const handlePlayVoiceInstructions = async () => {
-    if (isGuideSpeaking) {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-      setIsGuideSpeaking(false);
-      return;
-    }
-
-    setIsGuideSpeaking(true);
-    const textGuides = {
-      en: `Step 1. Please photograph your ${docDetectionType}. Step 2. Locate the alphanumeric identifier on the middle-front part. Step 3. Locate the field matching this identifier in the digital form. Step 4. Carefully enter these letters and numbers. Step 5. Click the submit button to complete your application.`,
-      te: `స్టెప్ 1. దయచేసి మీ ${docDetectionType} ను ఫోటో తీయండి. స్టెప్ 2. కార్డు ముందు భాగంలో ఉన్న సంఖ్యను గుర్తించండి. స్టెప్ 3. ఈ ఐడెంటిఫైయర్ కు సరిపోయే ఖాళీ బాక్స్ ను డిజిటల్ ఫారమ్ లో కనుగొనండి. స్టెప్ 4. ఈ నంబర్ ను జాగ్రత్తగా బాక్స్ లో నమోదు చేయండి. స్టెప్ 5. సమర్పించండి బటన్ పై క్లిక్ చేయండి.`,
-      hi: `चरण 1. कृपया अपने ${docDetectionType} का फोटो लें। चरण 2. कार्ड के मध्य-सामने वाले भाग पर संख्या को ढूंढें। चरण 3. डिजिटल फॉर्म में इस पहचानकर्ता से मेल खाने वाले क्षेत्र को खोजें। चरण 4. इस नंबर को बॉक्स में दर्ज करें। चरण 5. आवेदन पूरा करने के लिए सबमिट बटन पर क्लिक करें।`,
-      ta: `படி 1. தயவுசெய்து உங்கள் ${docDetectionType} ஐ புகைப்படம் எடுக்கவும். படி 2. அட்டை முன்பகுதியின் நடுவில் உள்ள எண்ணைக் கண்டறியவும். படி 3. விண்ணப்ப படிவத்தில் அதற்குரிய பெட்டியைக் கண்டறியவும். படி 4. அந்த எண்ணை கவனமாக உள்ளிடவும். படி 5. சமர்ப்பி பொத்தானைக் கிளிக் செய்யவும்.`
-    };
-
-    const guideStr = textGuides[language] || textGuides.en;
-    await speakText(guideStr, language);
-    setIsGuideSpeaking(false);
-  };
-
-  const handleApplyNow = (scheme) => {
-    const refId = `APP-2026-${Math.floor(10000 + Math.random() * 90000)}`;
     const newApp = {
       id: refId,
       schemeId: scheme.id,
       schemeName: scheme.name,
-      citizenName: user?.email || user?.phone || "Guest User",
+      citizenName: citizenNameVal,
       status: "Submitted",
       date: new Date().toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }),
       timeline: [
@@ -180,13 +155,7 @@ export default function SchemesPage() {
     };
     
     addApplication(newApp);
-    alert(`Demo Application Registered Successfully!\nReference ID: ${refId}\n\nYou can track this application on your Profile or Status tracker.`);
-    
-    // Reset states
-    setSelectedScheme(null);
-    setShowAssistant(false);
-    setUploadedFile(null);
-    setShowFormGuide(false);
+    setApplyStep("success");
   };
 
   return (
@@ -341,19 +310,18 @@ export default function SchemesPage() {
         ))}
       </div>
 
-      {/* Scheme Detail Modal & Document Form Assistant */}
       {selectedScheme && (
-        <div className="modal-backdrop" onClick={() => { setSelectedScheme(null); setShowAssistant(false); setUploadedFile(null); }}>
+        <div className="modal-backdrop" onClick={() => { setSelectedScheme(null); setApplyStep("details"); }}>
           <div className="modal scheme-detail-modal animate-slide-up text-left" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "650px", width: "95%" }}>
             
             <div className="modal-head">
-              <h2>{selectedScheme.name}</h2>
-              <button type="button" className="text-btn" onClick={() => { setSelectedScheme(null); setShowAssistant(false); setUploadedFile(null); }}>Close</button>
+              <h2>{applyStep === "form" ? `Apply for ${selectedScheme.name}` : applyStep === "review" ? "Review Application" : applyStep === "success" ? "Application Success" : selectedScheme.name}</h2>
+              <button type="button" className="text-btn" onClick={() => { setSelectedScheme(null); setApplyStep("details"); }}>Close</button>
             </div>
             
             <div className="modal-scroll-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               
-              {!showAssistant ? (
+              {applyStep === "details" && (
                 <>
                   <div className="gov-level-row mb-3">
                     <span className="badge">{selectedScheme.governmentLevel} Government</span>
@@ -401,154 +369,396 @@ export default function SchemesPage() {
                   </div>
 
                   <div className="modal-actions-footer mt-4" style={{ display: "flex", gap: "10px" }}>
-                    <button type="button" className="primary full" onClick={() => setShowAssistant(true)}>
-                      🤖 Scan & Apply with AI Assistant
+                    <button type="button" className="primary full" onClick={() => setApplyStep("form")}>
+                      📋 APPLY NOW
                     </button>
                   </div>
                 </>
-              ) : (
-                /* AI Document and Form Assistant Flow */
+              )}
+
+              {applyStep === "form" && (
                 <div className="animate-fade-in">
-                  <div className="tts-control-bar card" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-                    <h3 style={{ margin: "0", color: "#166534" }}>🤖 AI Document Assistant</h3>
-                    <p className="small" style={{ color: "#1b5e20", margin: "5px 0 0 0" }}>Ensure your documents match the program criteria before submitting.</p>
-                  </div>
-
-                  {/* 1. Document Upload Widget */}
-                  <div className="card p-3 mt-3 text-center border" style={{ background: "#f8fafc" }}>
-                    <h4>Step 1: Upload Required Verification Document</h4>
-                    <p className="small text-secondary mb-3">Attach a photo or scan of your: <b>{selectedScheme.requiredDocuments[0]}</b></p>
+                  <div className="admin-form">
                     
-                    <div style={{ position: "relative" }}>
-                      <input 
-                        type="file" 
-                        accept="image/*,application/pdf" 
-                        style={{ display: "none" }} 
-                        id="document-upload-file"
-                        onChange={handleFileUpload}
-                      />
-                      <label 
-                        htmlFor="document-upload-file"
-                        style={{ display: "flex", flexDirection: "column", gap: "8px", border: "2px dashed #cbd5e1", borderRadius: "8px", padding: "20px", cursor: "pointer" }}
-                      >
-                        <Upload size={24} className="mx-auto text-secondary" />
-                        <span className="small text-secondary">📷 Scan / Upload Document</span>
-                        <span className="badge" style={{ fontSize: "10px", padding: "4px 8px" }}>Supports JPG, PNG, PDF</span>
-                      </label>
-                    </div>
-
-                    {isAnalyzing && (
-                      <p className="small mt-2 text-primary animate-pulse">🤖 Reading and analyzing document metadata...</p>
+                    {/* FARMER SCHEME FORM */}
+                    {selectedScheme.category === "farmers" && (
+                      <>
+                        <div>
+                          <label>Full Name of Farmer</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter farmer name"
+                            value={applyFormData.fullName} 
+                            onChange={e => setApplyFormData({ ...applyFormData, fullName: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Mobile Number</label>
+                          <input 
+                            type="tel" 
+                            placeholder="10-digit mobile number"
+                            value={applyFormData.mobile} 
+                            onChange={e => setApplyFormData({ ...applyFormData, mobile: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Village Name</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter village"
+                            value={applyFormData.village} 
+                            onChange={e => setApplyFormData({ ...applyFormData, village: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>District</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter district"
+                            value={applyFormData.district} 
+                            onChange={e => setApplyFormData({ ...applyFormData, district: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Land Area (in Acres)</label>
+                          <input 
+                            type="number" 
+                            placeholder="e.g. 2.5"
+                            value={applyFormData.landDetails} 
+                            onChange={e => setApplyFormData({ ...applyFormData, landDetails: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Cultivated Crop Details</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. Paddy, Cotton"
+                            value={applyFormData.cropDetails} 
+                            onChange={e => setApplyFormData({ ...applyFormData, cropDetails: e.target.value })}
+                          />
+                        </div>
+                      </>
                     )}
 
-                    {uploadedFile && !isAnalyzing && (
-                      <div className="demo-note success-note mt-3 text-left" style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
-                        <strong>✓ Document detected: {docDetectionType}</strong>
-                        <p className="small" style={{ margin: "5px 0 0 0" }}>File name: {uploadedFile.name}</p>
-                      </div>
+                    {/* PENSION SCHEME FORM */}
+                    {selectedScheme.category === "pension" && (
+                      <>
+                        <div>
+                          <label>Full Name of Applicant</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter name"
+                            value={applyFormData.fullName} 
+                            onChange={e => setApplyFormData({ ...applyFormData, fullName: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Age (Years)</label>
+                          <input 
+                            type="number" 
+                            placeholder="Enter age"
+                            value={applyFormData.age} 
+                            onChange={e => setApplyFormData({ ...applyFormData, age: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Mobile Number</label>
+                          <input 
+                            type="tel" 
+                            placeholder="10-digit mobile number"
+                            value={applyFormData.mobile} 
+                            onChange={e => setApplyFormData({ ...applyFormData, mobile: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Residential Address</label>
+                          <textarea 
+                            placeholder="Full residential address"
+                            rows="2"
+                            value={applyFormData.address} 
+                            onChange={e => setApplyFormData({ ...applyFormData, address: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Pension Classification</label>
+                          <select 
+                            value={applyFormData.pensionType} 
+                            onChange={e => setApplyFormData({ ...applyFormData, pensionType: e.target.value })}
+                          >
+                            <option value="">-- Select Type --</option>
+                            <option value="oldage">Old Age Pension</option>
+                            <option value="widow">Widow Pension</option>
+                            <option value="disabled">Disabled Assistance</option>
+                          </select>
+                        </div>
+                      </>
                     )}
+
+                    {/* SCHOLARSHIP SCHEME FORM */}
+                    {selectedScheme.category === "education" && (
+                      <>
+                        <div>
+                          <label>Full Name of Student</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter student name"
+                            value={applyFormData.studentName} 
+                            onChange={e => setApplyFormData({ ...applyFormData, studentName: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Date of Birth</label>
+                          <input 
+                            type="date" 
+                            value={applyFormData.dob} 
+                            onChange={e => setApplyFormData({ ...applyFormData, dob: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Mobile Number</label>
+                          <input 
+                            type="tel" 
+                            placeholder="10-digit mobile number"
+                            value={applyFormData.mobile} 
+                            onChange={e => setApplyFormData({ ...applyFormData, mobile: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Education Level</label>
+                          <select 
+                            value={applyFormData.educationLevel} 
+                            onChange={e => setApplyFormData({ ...applyFormData, educationLevel: e.target.value })}
+                          >
+                            <option value="">-- Select Education --</option>
+                            <option value="10th">Post-Matric (10th+)</option>
+                            <option value="intermediate">Intermediate (12th)</option>
+                            <option value="undergraduate">Undergraduate Degree</option>
+                            <option value="postgraduate">Postgraduate</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label>Name of School / College / Institution</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter school/college name"
+                            value={applyFormData.institution} 
+                            onChange={e => setApplyFormData({ ...applyFormData, institution: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Course Name</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. B.Tech, Class XI"
+                            value={applyFormData.course} 
+                            onChange={e => setApplyFormData({ ...applyFormData, course: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Annual Family Income (INR)</label>
+                          <input 
+                            type="number" 
+                            placeholder="e.g. 120000"
+                            value={applyFormData.income} 
+                            onChange={e => setApplyFormData({ ...applyFormData, income: e.target.value })}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* GENERAL SCHEME FORM */}
+                    {selectedScheme.category !== "farmers" && selectedScheme.category !== "pension" && selectedScheme.category !== "education" && (
+                      <>
+                        <div>
+                          <label>Full Name of Applicant</label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter name"
+                            value={applyFormData.fullName} 
+                            onChange={e => setApplyFormData({ ...applyFormData, fullName: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Mobile Number</label>
+                          <input 
+                            type="tel" 
+                            placeholder="10-digit mobile number"
+                            value={applyFormData.mobile} 
+                            onChange={e => setApplyFormData({ ...applyFormData, mobile: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Full Residential Address</label>
+                          <textarea 
+                            placeholder="Enter address"
+                            rows="2"
+                            value={applyFormData.address} 
+                            onChange={e => setApplyFormData({ ...applyFormData, address: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Annual Family Income (INR)</label>
+                          <input 
+                            type="number" 
+                            placeholder="e.g. 150000"
+                            value={applyFormData.income} 
+                            onChange={e => setApplyFormData({ ...applyFormData, income: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Application Purpose / Details</label>
+                          <input 
+                            type="text" 
+                            placeholder="Why are you applying for this scheme?"
+                            value={applyFormData.generalDetail} 
+                            onChange={e => setApplyFormData({ ...applyFormData, generalDetail: e.target.value })}
+                          />
+                        </div>
+                      </>
+                    )}
+
                   </div>
 
-                  {/* 2. Document Check & form assistance details */}
-                  {uploadedFile && !isAnalyzing && (
-                    <div className="card mt-3 p-3 border">
-                      <h4>📋 Document Check Results</h4>
-                      <hr style={{ margin: "8px 0", borderColor: "#f1f5f9" }} />
-                      
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }} className="small">
-                        <div>✓ <b>Document type:</b> {docDetectionType}</div>
-                        <div>✓ <b>Required status:</b> Required for {selectedScheme.name}</div>
-                        <div>✓ <b>Readability check:</b> Text appears clear and fully readable.</div>
-                        <div>✓ <b>Needed information:</b> Unique Identification Key and Citizen Name details.</div>
-                      </div>
-
-                      <div style={{ display: "flex", gap: "8px", marginTop: "15px" }}>
-                        <button 
-                          type="button" 
-                          className="primary" 
-                          style={{ padding: "8px 12px", fontSize: "12px" }}
-                          onClick={() => setShowFormGuide(true)}
-                        >
-                          🤖 How do I fill this?
-                        </button>
-                        <button 
-                          type="button" 
-                          className="secondary-btn" 
-                          style={{ padding: "8px 12px", fontSize: "12px" }}
-                          onClick={() => setUploadedFile(null)}
-                        >
-                          Scan/Upload Different File
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 3. Form Guide (Steps 1 to 5) */}
-                  {showFormGuide && (
-                    <div className="card mt-3 p-3 border animate-slide-up" style={{ background: "#fef8e6", borderColor: "#fef3c7" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <h4>📋 AI Form Guide Steps</h4>
-                        <button 
-                          type="button" 
-                          className="secondary-btn" 
-                          style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                          onClick={handlePlayVoiceInstructions}
-                        >
-                          <Volume2 size={13} /> {isGuideSpeaking ? "Stop" : "🔊 Listen"}
-                        </button>
-                      </div>
-                      <hr style={{ margin: "8px 0", borderColor: "#fef3c7" }} />
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }} className="small">
-                        <div>
-                          <strong>STEP 1: Document verification</strong>
-                          <p className="text-secondary">Attach your {docDetectionType} using the scan/upload button above.</p>
-                        </div>
-                        <div>
-                          <strong>STEP 2: Find document identifier</strong>
-                          <p className="text-secondary">Look at the middle part of the front page on your {docDetectionType} to find the identification number.</p>
-                        </div>
-                        <div>
-                          <strong>STEP 3: Field selection</strong>
-                          <p className="text-secondary">Enter the matching identifier inside the {docDetectionType} Number field below.</p>
-                        </div>
-                        <div>
-                          <strong>STEP 4: Entry verification</strong>
-                          <p className="text-secondary">Double check the spelling and digits to prevent verification delays.</p>
-                        </div>
-                        <div>
-                          <strong>STEP 5: What to do next</strong>
-                          <p className="text-secondary">Press the Submit button below to upload the data for local panchayat block inspections.</p>
-                        </div>
-                      </div>
-
-                      {/* Mock Form fields */}
-                      <div className="admin-form mt-3 text-left">
-                        <label>{docDetectionType} ID Number</label>
-                        <input type="text" placeholder={`Enter unique ${docDetectionType} code`} required />
-                        
-                        <label className="mt-2">Applicant Full Name</label>
-                        <input type="text" placeholder="As written in document" required />
-                      </div>
-
-                      <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-                        <button type="button" className="primary full" onClick={() => handleApplyNow(selectedScheme)}>
-                          Complete Application Submission
-                        </button>
-                        <button type="button" className="secondary-btn" onClick={() => setShowAssistant(false)}>
-                          Back to Details
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {!uploadedFile && (
-                    <button type="button" className="secondary-btn full mt-3" onClick={() => setShowAssistant(false)}>
-                      Back to Scheme Details
+                  <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+                    <button type="button" className="secondary-btn w-1/3" onClick={() => setApplyStep("details")}>
+                      Cancel
                     </button>
-                  )}
+                    <button 
+                      type="button" 
+                      className="primary flex-1" 
+                      onClick={() => {
+                        // Simple validations
+                        if (selectedScheme.category === "farmers") {
+                          if (!applyFormData.fullName || !applyFormData.mobile || !applyFormData.village || !applyFormData.district) {
+                            alert("Please fill in all the required fields.");
+                            return;
+                          }
+                        } else if (selectedScheme.category === "pension") {
+                          if (!applyFormData.fullName || !applyFormData.age || !applyFormData.mobile || !applyFormData.address) {
+                            alert("Please fill in all the required fields.");
+                            return;
+                          }
+                        } else if (selectedScheme.category === "education") {
+                          if (!applyFormData.studentName || !applyFormData.dob || !applyFormData.mobile) {
+                            alert("Please fill in all the required fields.");
+                            return;
+                          }
+                        } else {
+                          if (!applyFormData.fullName || !applyFormData.mobile || !applyFormData.address) {
+                            alert("Please fill in all the required fields.");
+                            return;
+                          }
+                        }
+                        setApplyStep("review");
+                      }}
+                    >
+                      Review details <ArrowRight size={16} />
+                    </button>
+                  </div>
                 </div>
               )}
+
+              {applyStep === "review" && (
+                <div className="animate-fade-in">
+                  <p className="small text-secondary mb-3">Please verify that all the information entered matches your certificates.</p>
+
+                  <div className="card bg-light p-3 border mb-3" style={{ fontSize: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div><strong>Scheme:</strong> {selectedScheme.name}</div>
+                    <hr style={{ borderColor: "#cbd5e1", margin: "5px 0" }} />
+
+                    {selectedScheme.category === "education" ? (
+                      <>
+                        <div><strong>Student Name:</strong> {applyFormData.studentName}</div>
+                        <div><strong>Date of Birth:</strong> {applyFormData.dob}</div>
+                        <div><strong>Mobile Number:</strong> {applyFormData.mobile}</div>
+                        {applyFormData.educationLevel && <div><strong>Education Level:</strong> {applyFormData.educationLevel}</div>}
+                        {applyFormData.institution && <div><strong>Institution:</strong> {applyFormData.institution}</div>}
+                        {applyFormData.course && <div><strong>Course:</strong> {applyFormData.course}</div>}
+                        {applyFormData.income && <div><strong>Annual Family Income:</strong> ₹{applyFormData.income}</div>}
+                      </>
+                    ) : (
+                      <>
+                        <div><strong>Full Name:</strong> {applyFormData.fullName}</div>
+                        {applyFormData.age && <div><strong>Age:</strong> {applyFormData.age} years</div>}
+                        <div><strong>Mobile Number:</strong> {applyFormData.mobile}</div>
+                        {applyFormData.address && <div><strong>Address:</strong> {applyFormData.address}</div>}
+                      </>
+                    )}
+
+                    {selectedScheme.category === "farmers" && (
+                      <>
+                        <div><strong>Village:</strong> {applyFormData.village}</div>
+                        <div><strong>District:</strong> {applyFormData.district}</div>
+                        {applyFormData.landDetails && <div><strong>Land Owned:</strong> {applyFormData.landDetails} Acres</div>}
+                        {applyFormData.cropDetails && <div><strong>Crops Cultivated:</strong> {applyFormData.cropDetails}</div>}
+                      </>
+                    )}
+
+                    {selectedScheme.category === "pension" && applyFormData.pensionType && (
+                      <div><strong>Pension Type:</strong> {applyFormData.pensionType}</div>
+                    )}
+
+                    {selectedScheme.category !== "farmers" && selectedScheme.category !== "pension" && selectedScheme.category !== "education" && (
+                      <>
+                        {applyFormData.income && <div><strong>Annual Family Income:</strong> ₹{applyFormData.income}</div>}
+                        {applyFormData.generalDetail && <div><strong>Details:</strong> {applyFormData.generalDetail}</div>}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="demo-note mb-4">
+                    <strong>📝 Prototype Simulation Note:</strong> Under this prototype, no actual documents are required to be uploaded.
+                  </div>
+
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button type="button" className="secondary-btn w-1/3" onClick={() => setApplyStep("form")}>
+                      <ArrowLeft size={16} /> Edit
+                    </button>
+                    <button type="button" className="primary flex-1" onClick={() => handleApplyFormSubmit(selectedScheme)} style={{ background: "#16a34a", borderColor: "#16a34a" }}>
+                      Confirm & Submit Application
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {applyStep === "success" && (
+                <div className="animate-fade-in text-center py-4">
+                  <CheckCircle size={64} className="text-success mx-auto mb-3" />
+                  <h3 className="text-success font-bold">Application Submitted Successfully</h3>
+                  <p className="text-secondary mt-1">Your request has been successfully registered in the portal.</p>
+                  
+                  <div className="card p-3 my-4 bg-light border" style={{ maxWidth: "350px", margin: "20px auto" }}>
+                    <span className="small text-secondary">APPLICATION REFERENCE</span>
+                    <h2 className="font-mono text-primary mt-1" style={{ fontSize: "22px" }}>{generatedRef}</h2>
+                  </div>
+
+                  <button 
+                    type="button" 
+                    className="primary" 
+                    onClick={() => {
+                      setSelectedScheme(null);
+                      setApplyStep("details");
+                    }}
+                  >
+                    Close Window
+                  </button>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

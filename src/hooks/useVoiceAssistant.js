@@ -5,8 +5,7 @@ import {
   processVoiceRequest,
   speakText,
   processLocationResults,
-  resetConversationContext,
-  SpeechToTextAPI
+  resetConversationContext
 } from "../services/voiceService";
 import { LANGUAGES_REGISTRY } from "../data/translations";
 
@@ -18,121 +17,19 @@ export function useVoiceAssistant() {
   const [error, setError] = useState(null);
   const [locationResults, setLocationResults] = useState([]);
 
-  // MediaRecorder refs
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const recordingStartTimeRef = useRef(null);
-  const recordingTimeoutRef = useRef(null);
-  const silenceDetectionRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const microphoneRef = useRef(null);
-
-  // Refs to bypass stale closures in event listeners
+  // Refs for tracking SpeechRecognition state
+  const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
-  const transcriptRef = useRef("");
+  const accumulatedTranscriptRef = useRef("");
   const languageRef = useRef(language);
 
-  // Sync language ref
+  // Sync language ref to prevent stale closures
   useEffect(() => {
     languageRef.current = language;
   }, [language]);
 
-  const reset = useCallback(() => {
-    console.log("VOICE DEBUG: reset called");
-    
-    // Clear timeouts
-    if (recordingTimeoutRef.current) {
-      clearTimeout(recordingTimeoutRef.current);
-      recordingTimeoutRef.current = null;
-    }
-    if (silenceDetectionRef.current) {
-      cancelAnimationFrame(silenceDetectionRef.current);
-      silenceDetectionRef.current = null;
-    }
-    
-    // Clean up audio context
-    if (audioContextRef.current) {
-      try {
-        audioContextRef.current.close();
-      } catch (e) {}
-      audioContextRef.current = null;
-    }
-    
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {}
-    }
-    isListeningRef.current = false;
-    transcriptRef.current = "";
-    setState(VOICE_STATES.READY);
-    setTranscript("");
-    setResponse("");
-    setError(null);
-    setLocationResults([]);
-    resetConversationContext();
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Clear timeouts
-      if (recordingTimeoutRef.current) {
-        clearTimeout(recordingTimeoutRef.current);
-      }
-      if (silenceDetectionRef.current) {
-        cancelAnimationFrame(silenceDetectionRef.current);
-      }
-      
-      // Clean up audio context
-      if (audioContextRef.current) {
-        try {
-          audioContextRef.current.close();
-        } catch (e) {}
-      }
-      
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch (e) {}
-      }
-    };
-  }, []);
-
-  const handleLocationSearch = useCallback((langKey) => {
-    setState(VOICE_STATES.FINDING_LOCATION);
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
-      setState(VOICE_STATES.READY);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const res = processLocationResults(latitude, longitude, langKey);
-        setResponse(res.response);
-        setLocationResults(res.results);
-        setState(VOICE_STATES.RESPONSE);
-        await speakText(res.response, langKey);
-      },
-      async (err) => {
-        console.warn("Geolocation permission denied/failed. Falling back to default center locations.");
-        const fallbackLat = 16.3067;
-        const fallbackLng = 80.4365;
-        const res = processLocationResults(fallbackLat, fallbackLng, langKey);
-        setResponse(`${res.response} (Note: Showing fallback coordinates as location permission was denied)`);
-        setLocationResults(res.results);
-        setState(VOICE_STATES.RESPONSE);
-        await speakText(res.response, langKey);
-      },
-      { timeout: 8000 }
-    );
-  }, []);
-
-  // Process the final collected transcript
-  const handleFinalSpeechText = async (text, activeLang) => {
+  // Process final text
+  const handleFinalSpeechText = useCallback(async (text, activeLang) => {
     console.log("VOICE DEBUG: submitting transcript to assistant:", text);
     setState(VOICE_STATES.PROCESSING);
     try {
@@ -145,7 +42,35 @@ export function useVoiceAssistant() {
       }
 
       if (result.requiresLocation) {
-        handleLocationSearch(outputLang);
+        // Location search
+        setState(VOICE_STATES.FINDING_LOCATION);
+        if (!navigator.geolocation) {
+          setError("Geolocation is not supported by your browser.");
+          setState(VOICE_STATES.READY);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const res = processLocationResults(latitude, longitude, outputLang);
+            setResponse(res.response);
+            setLocationResults(res.results);
+            setState(VOICE_STATES.RESPONSE);
+            await speakText(res.response, outputLang);
+          },
+          async (err) => {
+            console.warn("Geolocation permission denied/failed. Falling back to default center locations.");
+            const fallbackLat = 16.3067;
+            const fallbackLng = 80.4365;
+            const res = processLocationResults(fallbackLat, fallbackLng, outputLang);
+            setResponse(`${res.response} (Note: Showing fallback coordinates as location permission was denied)`);
+            setLocationResults(res.results);
+            setState(VOICE_STATES.RESPONSE);
+            await speakText(res.response, outputLang);
+          },
+          { timeout: 8000 }
+        );
       } else {
         setResponse(result.response);
         setState(VOICE_STATES.RESPONSE);
@@ -156,37 +81,61 @@ export function useVoiceAssistant() {
       setError("Voice input had a temporary problem. Please try again.");
       setState(VOICE_STATES.READY);
     }
-  };
+  }, [setLanguage]);
+
+  // Clean stop/cleanup helper
+  const cleanupRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        // Remove event handlers to prevent secondary triggers
+        recognitionRef.current.onstart = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+        console.log("Recognition stopped");
+      } catch (e) {
+        console.warn("Error during recognition stop/cleanup:", e);
+      }
+      recognitionRef.current = null;
+    }
+    isListeningRef.current = false;
+  }, []);
+
+  const reset = useCallback(() => {
+    console.log("VOICE DEBUG: reset called");
+    cleanupRecognition();
+    setState(VOICE_STATES.READY);
+    setTranscript("");
+    setResponse("");
+    setError(null);
+    setLocationResults([]);
+    resetConversationContext();
+  }, [cleanupRecognition]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupRecognition();
+    };
+  }, [cleanupRecognition]);
 
   const activate = useCallback(async () => {
-    console.log("VOICE DEBUG: activate triggered. Current state:", state, "isListeningRef:", isListeningRef.current);
-    
-    // Stop any active SpeechSynthesis output to avoid microphone feedback/deafness
-    try {
-      if (window.speechSynthesis) {
-        console.log("VOICE DEBUG: cancelling existing SpeechSynthesis");
-        window.speechSynthesis.cancel();
-      }
-    } catch (e) {
-      console.warn("VOICE DEBUG: failed to cancel speech synthesis:", e);
+    console.log("VOICE DEBUG: activate clicked. isListening:", isListeningRef.current);
+
+    // Cancel existing TTS
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
-    // Toggle Off if active
+    // Toggle off if listening
     if (isListeningRef.current) {
-      console.log("VOICE DEBUG: toggling off active listening session");
-      
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-        return; // stop callback handles processing
-      }
-
-      isListeningRef.current = false;
-      setState(VOICE_STATES.READY);
+      cleanupRecognition();
       return;
     }
 
     if (state === VOICE_STATES.PROCESSING || state === VOICE_STATES.FINDING_LOCATION) {
-      console.log("VOICE DEBUG: ignored activate, currently processing or locating");
+      console.log("VOICE DEBUG: ignore activate, processing active");
       return;
     }
 
@@ -194,90 +143,89 @@ export function useVoiceAssistant() {
     setTranscript("");
     setResponse("");
     setLocationResults([]);
-    transcriptRef.current = "";
+    accumulatedTranscriptRef.current = "";
 
     const reg = LANGUAGES_REGISTRY.find(item => item.code === languageRef.current);
     const langCode = reg ? reg.speechRecognitionCode : "en-IN";
 
-    // MediaRecorder primary pipeline
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
     try {
-      console.log("VOICE DEBUG: Starting MediaRecorder primary pipeline. Lang:", langCode);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      recordingStartTimeRef.current = Date.now();
-      
-      let mimeType = "audio/webm";
-      if (!MediaRecorder.isTypeSupported("audio/webm")) {
-        if (MediaRecorder.isTypeSupported("audio/mp4")) {
-          mimeType = "audio/mp4";
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.lang = langCode;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        isListeningRef.current = true;
+        setState(VOICE_STATES.LISTENING);
+        console.log("Recognition started");
+      };
+
+      recognition.onerror = (event) => {
+        console.error(`Recognition error: ${event.error}`);
+        if (event.error === "not-allowed") {
+          setError("Microphone permission blocked. Please check browser settings.");
         } else {
-          mimeType = "audio/ogg";
+          setError(`Speech recognition failed: ${event.error}`);
         }
-      }
-      
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        cleanupRecognition();
+        setState(VOICE_STATES.READY);
       };
 
-      mediaRecorder.onstop = async () => {
-        console.log("VOICE DEBUG: MediaRecorder stopped. Processing audio content...");
-        
-        isListeningRef.current = false;
+      recognition.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          try {
-            const base64Audio = reader.result.split(",")[1];
-            setState(VOICE_STATES.PROCESSING);
-            setTranscript("Understanding your speech...");
-
-            const transcriptText = await SpeechToTextAPI(base64Audio, langCode);
-            console.log("VOICE DEBUG: Backend STT returned transcript:", transcriptText);
-            
-            if (!transcriptText || !transcriptText.trim()) {
-              setError("I couldn't hear anything. Please try speaking again.");
-              setState(VOICE_STATES.READY);
-              return;
-            }
-
-            setTranscript(transcriptText);
-            transcriptRef.current = transcriptText;
-            await handleFinalSpeechText(transcriptText, languageRef.current);
-          } catch (err) {
-            console.error("VOICE DEBUG: Backend STT failed:", err);
-            setError("Cloud speech recognition failed. Please try again.");
-            setState(VOICE_STATES.READY);
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const transcriptSegment = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcriptSegment;
+          } else {
+            interimTranscript += transcriptSegment;
           }
-        };
+        }
 
-        // Release mic stream track locks
-        stream.getTracks().forEach(track => track.stop());
+        const currentFull = (accumulatedTranscriptRef.current + finalTranscript).trim();
+        const display = currentFull + (interimTranscript ? " " + interimTranscript : "");
+        
+        if (display) {
+          setTranscript(display);
+          console.log(`Recognition result: "${display}"`);
+        }
+
+        if (finalTranscript) {
+          accumulatedTranscriptRef.current += finalTranscript;
+        }
       };
 
-      mediaRecorder.start();
-      isListeningRef.current = true;
-      setState(VOICE_STATES.LISTENING);
-      
-      console.log("VOICE DEBUG: MediaRecorder active as primary STT.");
+      recognition.onend = async () => {
+        console.log("Recognition ended callback");
+        const finalResult = accumulatedTranscriptRef.current.trim();
+        cleanupRecognition();
+        
+        if (!finalResult) {
+          setState(VOICE_STATES.READY);
+          return;
+        }
+
+        console.log(`Final transcript: "${finalResult}"`);
+        await handleFinalSpeechText(finalResult, languageRef.current);
+      };
+
+      recognition.start();
     } catch (err) {
-      console.error("VOICE DEBUG: MediaRecorder setup failed:", err);
-      setError("Microphone permission denied or no audio input device found.");
+      console.error("VOICE DEBUG: SpeechRecognition start threw error:", err);
+      setError("Failed to start speech recognition.");
       setState(VOICE_STATES.READY);
     }
-  }, [state, handleLocationSearch, setLanguage]);
-
-  const repeatResponse = useCallback(async () => {
-    if (response) {
-      await speakText(response, languageRef.current);
-    }
-  }, [response]);
+  }, [state, handleFinalSpeechText, cleanupRecognition]);
 
   return {
     state,
@@ -287,7 +235,11 @@ export function useVoiceAssistant() {
     locationResults,
     activate,
     reset,
-    repeatResponse,
+    repeatResponse: useCallback(async () => {
+      if (response) {
+        await speakText(response, languageRef.current);
+      }
+    }, [response]),
     isListening: state === VOICE_STATES.LISTENING,
     isProcessing: state === VOICE_STATES.PROCESSING,
     isFindingLocation: state === VOICE_STATES.FINDING_LOCATION,
