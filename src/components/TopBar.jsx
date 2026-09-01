@@ -1,5 +1,6 @@
 import { Accessibility, Bell, Globe2, LogIn, LogOut } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import Logo from "./Logo";
 
 export default function TopBar() {
   const {
@@ -35,7 +36,10 @@ export default function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="topbar-title">{t(page)}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <Logo size={30} showText={false} />
+        <div className="topbar-title">{t(page)}</div>
+      </div>
       <div className="top-actions">
         <button
           type="button"

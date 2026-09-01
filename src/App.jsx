@@ -43,8 +43,8 @@ function AppContent() {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "14px", background: "#f8fafc" }}>
         <Logo size={70} showText={false} />
-        <div style={{ color: "#0ea5e9", fontWeight: "900", fontSize: "22px", letterSpacing: "1px" }}>
-          JANASEVA VOICE
+        <div style={{ color: "#0f172a", fontWeight: "900", fontSize: "22px", letterSpacing: "0.5px" }}>
+          Jana<span style={{ color: "#0ea5e9" }}>Seva</span> <span style={{ color: "#ea580c" }}>VOICE</span>
         </div>
         <div style={{ color: "#64748b", fontSize: "14px", fontWeight: "500" }}>
           Checking authentication session...

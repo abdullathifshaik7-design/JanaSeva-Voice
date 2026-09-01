@@ -11,6 +11,7 @@ import {
   ExternalLink, FileText, CheckCircle, ChevronDown, ChevronUp, ShieldCheck
 } from "lucide-react";
 import DemoNote from "../components/DemoNote";
+import Logo from "../components/Logo";
 
 const CALL_LANG_MAP = {
   "te-IN": { code: "te", name: "Telugu", native: "తెలుగు", flag: "🇮🇳" },
@@ -799,7 +800,10 @@ export default function VoicePage() {
       {/* TAB 2: Helpline Phone Call Mode */}
       {activeTab === "phone_call" && (
         <div className="card text-center p-4">
-          <h2 style={{ marginBottom: "6px" }}>📞 JanaSeva AI</h2>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "8px" }}>
+            <Logo size={28} showText={false} />
+            <h2 style={{ margin: 0, fontSize: "22px", color: "#0f172a" }}>JanaSeva AI</h2>
+          </div>
           <hr style={{ margin: "15px 0", borderColor: "#e2e8f0" }} />
 
           {!callActive ? (
@@ -855,11 +859,8 @@ export default function VoicePage() {
                 {/* Top Row: Title, Connected Pill, Duration, End Call */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ position: "relative", width: "12px", height: "12px" }}>
-                      <div style={{ position: "absolute", width: "100%", height: "100%", borderRadius: "50%", background: "#22c55e" }} />
-                      <div className="animate-ping" style={{ position: "absolute", width: "100%", height: "100%", borderRadius: "50%", background: "#22c55e", opacity: 0.75 }} />
-                    </div>
-                    <strong style={{ fontSize: "16px", color: "#0f172a" }}>📞 JanaSeva AI</strong>
+                    <Logo size={24} showText={false} />
+                    <strong style={{ fontSize: "16px", color: "#0f172a" }}>JanaSeva AI</strong>
                     <span className="badge" style={{ background: "#dcfce7", color: "#166534", fontSize: "11px", fontWeight: "700" }}>
                       ● AI Connected
                     </span>
@@ -994,8 +995,14 @@ export default function VoicePage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: "700", color: log.sender === "agent" ? "#0284c7" : "#0f766e" }}>
-                        {log.sender === "agent" ? "📞 JanaSeva AI:" : "🗣️ You:"}
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: log.sender === "agent" ? "#0284c7" : "#0f766e", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        {log.sender === "agent" ? (
+                          <>
+                            <Logo size={15} showText={false} /> JanaSeva AI:
+                          </>
+                        ) : (
+                          "🗣️ You:"
+                        )}
                       </span>
                       <span style={{ fontSize: "11px", color: "#94a3b8" }}>{log.time}</span>
                     </div>

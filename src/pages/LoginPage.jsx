@@ -194,8 +194,8 @@ export default function LoginPage() {
               <Logo size={90} showText={false} />
             </div>
             
-            <h1 style={{ fontSize: "28px", fontWeight: "900", color: "#0ea5e9", margin: "10px 0 2px 0", letterSpacing: "1px" }}>
-              JANASEVA VOICE
+            <h1 style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", margin: "12px 0 3px 0", letterSpacing: "0.5px" }}>
+              Jana<span style={{ color: "#0ea5e9" }}>Seva</span> <span style={{ color: "#ea580c" }}>VOICE</span>
             </h1>
             
             <div style={{ fontSize: "14px", fontWeight: "700", color: "#64748b", margin: "0 0 15px 0", letterSpacing: "0.5px" }}>

@@ -1,16 +1,73 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  {/* Simple professional circular base */}
-  <circle cx="50" cy="50" r="46" stroke="#0ea5e9" strokeWidth="4" fill="#0f172a" />
-  
-  {/* Minimal sound wave lines */}
-  <path d="M 28,50 A 22,22 0 0,1 36,36" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-  <path d="M 72,50 A 22,22 0 0,0 64,36" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-  <path d="M 22,50 A 28,28 0 0,1 32,30" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" />
-  <path d="M 78,50 A 28,28 0 0,0 68,30" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" />
+  <defs>
+    <!-- Deep Indian Sovereign Blue Base -->
+    <linearGradient id="jsvNavyFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F2D59" />
+      <stop offset="50%" stop-color="#0A1F3D" />
+      <stop offset="100%" stop-color="#06152B" />
+    </linearGradient>
 
-  {/* Clean geometric microphone icon */}
-  <rect x="44" y="24" width="12" height="20" rx="6" fill="#0ea5e9" stroke="#ffffff" strokeWidth="2" />
-  <path d="M 38,40 A 15,15 0 0,0 62,40" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-  <line x1="50" y1="44" x2="50" y2="64" stroke="#ffffff" strokeWidth="3" />
-  <line x1="40" y1="64" x2="60" y2="64" stroke="#0ea5e9" strokeWidth="4" strokeLinecap="round" />
+    <!-- Indian Saffron Accent -->
+    <linearGradient id="jsvSaffronFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9933" />
+      <stop offset="100%" stop-color="#E65100" />
+    </linearGradient>
+
+    <!-- India Green Accent -->
+    <linearGradient id="jsvGreenFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#138808" />
+      <stop offset="100%" stop-color="#0A5C03" />
+    </linearGradient>
+
+    <!-- Vibrant Civic Cyan -->
+    <linearGradient id="jsvCyanFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+  </defs>
+
+  <!-- 1. Circular Civic Seal Base -->
+  <circle cx="50" cy="50" r="46" fill="url(#jsvNavyFav)" stroke="#1E406D" stroke-width="1.5" />
+  
+  <!-- 2. Subtle Ashoka Radial Harmony (12 sovereign rays) -->
+  <g opacity="0.3" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round">
+    <line x1="50" y1="9" x2="50" y2="13" />
+    <line x1="50" y1="87" x2="50" y2="91" />
+    <line x1="9" y1="50" x2="13" y2="50" />
+    <line x1="87" y1="50" x2="91" y2="50" />
+    <line x1="21" y1="21" x2="24" y2="24" />
+    <line x1="76" y1="76" x2="79" y2="79" />
+    <line x1="21" y1="79" x2="24" y2="76" />
+    <line x1="76" y1="24" x2="79" y2="21" />
+    <line x1="14" y1="36" x2="18" y2="37" />
+    <line x1="82" y1="63" x2="86" y2="64" />
+    <line x1="14" y1="64" x2="18" y2="63" />
+    <line x1="82" y1="37" x2="86" y2="36" />
+  </g>
+
+  <!-- 3. Indian Identity Accents: Saffron Top Arc & Green Bottom Arc -->
+  <path d="M 33 8 A 44 44 0 0 1 67 8" stroke="url(#jsvSaffronFav)" stroke-width="3" stroke-linecap="round" />
+  <path d="M 35 92 A 44 44 0 0 0 65 92" stroke="url(#jsvGreenFav)" stroke-width="3" stroke-linecap="round" />
+
+  <!-- 4. Acoustic Voice Resonance Waves (Symmetric, Crisp at small sizes) -->
+  <path d="M 28 40 A 18 18 0 0 0 28 60" stroke="#38BDF8" stroke-width="2.8" stroke-linecap="round" opacity="0.95" />
+  <path d="M 20 33 A 28 28 0 0 0 20 67" stroke="#38BDF8" stroke-width="2.2" stroke-linecap="round" opacity="0.55" />
+  <path d="M 72 40 A 18 18 0 0 1 72 60" stroke="#38BDF8" stroke-width="2.8" stroke-linecap="round" opacity="0.95" />
+  <path d="M 80 33 A 28 28 0 0 1 80 67" stroke="#38BDF8" stroke-width="2.2" stroke-linecap="round" opacity="0.55" />
+
+  <!-- 5. Central Voice AI Microphone Capsule -->
+  <rect x="43" y="27" width="14" height="24" rx="7" fill="url(#jsvCyanFav)" />
+  <path d="M 46 30 Q 50 28 54 30" stroke="#BAE6FD" stroke-width="1.2" stroke-linecap="round" />
+  <line x1="43" y1="38" x2="57" y2="38" stroke="#0369A1" stroke-width="1.5" />
+  <line x1="47" y1="33" x2="53" y2="33" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity="0.9" />
+
+  <!-- AI Voice Energy Core (Saffron Pulse Node) -->
+  <circle cx="50" cy="43" r="2.2" fill="#FFFFFF" />
+  <circle cx="50" cy="43" r="1.4" fill="url(#jsvSaffronFav)" />
+
+  <!-- 6. Microphone Cradle / Seva Embrace -->
+  <path d="M 36 43 C 36 57 64 57 64 43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none" />
+  <line x1="50" y1="56" x2="50" y2="69" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+  <line x1="39" y1="70" x2="61" y2="70" stroke="url(#jsvCyanFav)" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="50" cy="70" r="1.5" fill="#FFFFFF" />
 </svg>
