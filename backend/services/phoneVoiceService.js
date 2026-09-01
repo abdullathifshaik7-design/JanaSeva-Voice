@@ -152,6 +152,9 @@ export async function handleSimulationTurn({ callId, text, language }) {
     isEndCall: aiResult.isEndCall,
     slowPaced: aiResult.slowPaced || false,
     audioContent: ttsResult.audioContent,
+    recommendations: aiResult.recommendations || session.recommendations || null,
+    profile: aiResult.profile || session.profile || null,
+    selectedScheme: aiResult.selectedScheme || session.selectedScheme || null,
     session: {
       turnCount: session.turnCount,
       lastIntent: session.lastIntent,

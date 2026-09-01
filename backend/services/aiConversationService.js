@@ -5,6 +5,15 @@
 import { SCHEMES, CATEGORIES, SERVICE_CENTERS } from "../../src/data/db.js";
 import { DB_TRANSLATIONS, getTranslatedDbText } from "../../src/data/dbTranslations.js";
 import { detectLanguage, toTelephonyLanguageCode, fromTelephonyLanguageCode } from "./languageService.js";
+import {
+  createEmptyProfile,
+  extractProfileFromText,
+  getNextEligibilityQuestion,
+  evaluateSchemeEligibility,
+  recommendSchemes,
+  formatSpokenRecommendation,
+  getSchemeDetailVoice
+} from "./eligibilityEngine.js";
 
 // Specialized Senior-Citizen greeting phrases per language
 export const GREETINGS = {
@@ -100,6 +109,21 @@ export function identifyIntent(text, currentLang = "te") {
     if (matchesAny(lower, langList)) return { intent: "grievance", category: "problems" };
   }
 
+  // Check documents inquiry
+  if (matchesAny(lower, ["documents", "document", "documents enti", "kaagithalu", "aadhaar avasarama", "documents chahiye", "dastavez", "pathirangal", "డాక్యుమెంట్లు", "కాగితాలు", "दस्तावेज", "ஆவணங்கள்"])) {
+    return { intent: "scheme_documents", category: "scheme_query" };
+  }
+
+  // Check how to apply inquiry
+  if (matchesAny(lower, ["apply", "how to apply", "apply ela", "ela apply", "apply cheyyali", "daraghasthu", "apply kaise", "kaise kare", "eppadi vinnapam", "దరఖాస్తు", "आवेदन कैसे", "ఎలా అప్లై"])) {
+    return { intent: "scheme_apply", category: "scheme_query" };
+  }
+
+  // Check scheme details inquiry
+  if (matchesAny(lower, ["details", "details cheppu", "gurinchi cheppu", "vivaralu", "ke baare mein", "patthi solunga", "వివరాలు", "గురించి చెప్పు", "के बारे में"])) {
+    return { intent: "scheme_details", category: "scheme_query" };
+  }
+
   // Check Pension
   if (matchesAny(lower, ["pension", "పెన్షన్", "పించన్", "पेंशन", "ஓய்வూதியம்", "old age", "vridha", "senior", "వృద్ధాప్య"])) {
     return { intent: "pension", category: "pension" };
@@ -130,12 +154,61 @@ export function identifyIntent(text, currentLang = "te") {
     return { intent: "health", category: "health" };
   }
 
+  // Check eligibility / recommendation check
+  if (matchesAny(lower, ["suitable", "eligibility", "eligible", "arhulanu", "arhulu", "arhutha", "naku em schemes", "naaku em schemes", "em schemes unnayi", "yojana check", "schemes kanukkundam", "check eligibility", "naaku schemes kavali", "scheme kavali", "schemes unte cheppu", "kya yojana", "kon si yojana", "yojana batayein", "पात्र", "पात्रता", "ennaku enna thittam"])) {
+    return { intent: "eligibility_check", category: "eligibility" };
+  }
+
   // Check Nearby Center
   if (matchesAny(lower, ["near me", "center", "office", "సమీప", "కేంద్రం", "समीप", "அருகில்", "meeseva", "sachivalayam"])) {
     return { intent: "near_me", category: "help" };
   }
 
   return { intent: "general_inquiry", category: "general" };
+}
+
+/**
+ * Match a specific scheme from user utterance
+ */
+export function findSchemeByQuery(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+
+  for (const s of SCHEMES) {
+    if (lower.includes(s.id)) return s;
+    if (lower.includes(s.name.toLowerCase())) return s;
+    if (s.alternateNames && s.alternateNames.some(alt => lower.includes(alt.toLowerCase()))) return s;
+  }
+
+  if (/pm kisan|పీఎం కిసాన్|पीएम किसान|kisan samman/.test(lower)) {
+    return SCHEMES.find(s => s.id === "pm-kisan");
+  }
+  if (/rythu bharosa|రైతు భరోసా|ysr rythu/.test(lower)) {
+    return SCHEMES.find(s => s.id === "ap-rythu-bharosa");
+  }
+  if (/ntr bharosa|ఆంధ్రప్రదేశ్ వృద్ధాప్య|ap pension/.test(lower)) {
+    return SCHEMES.find(s => s.id === "ybr-ntr-pension-ap");
+  }
+  if (/pension|పెన్షన్|పించన్|पेंशन|old age/.test(lower)) {
+    return SCHEMES.find(s => s.id === "old-age-pension-national") || SCHEMES.find(s => s.id === "ybr-ntr-pension-ap");
+  }
+  if (/scholarship|student|విద్యార్థి|छात्रवृत्ति/.test(lower)) {
+    return SCHEMES.find(s => s.id === "post-matric-scholarship");
+  }
+  if (/ayushman|pmjay|health card|ఆరోగ్య కార్డ్|आयुष्मान/.test(lower)) {
+    return SCHEMES.find(s => s.id === "ayushman-bharat-pmjay");
+  }
+  if (/pmay|house|housing|ఇళ్ల|ఆవాస్|आवास/.test(lower)) {
+    return SCHEMES.find(s => s.id === "pm-awas-yojana");
+  }
+  if (/nrega|100 days|ఉపాధి హామీ|मनरेगा/.test(lower)) {
+    return SCHEMES.find(s => s.id === "mgnrega-jobseeker");
+  }
+  if (/sukanya|girl child|సుకన్య|सुकन्या/.test(lower)) {
+    return SCHEMES.find(s => s.id === "sukanya-samriddhi");
+  }
+
+  return null;
 }
 
 /**
@@ -202,24 +275,53 @@ export function generateLocalPhoneResponse(intent, category, userText, langCode,
 
   // 5. Pension Schemes
   if (intent === "pension") {
+    const lower = (userText || "").toLowerCase();
+    if (/status|స్టేటస్|check|చెక్|जांच/.test(lower)) {
+      const statusReplies = {
+        te: "మీ పెన్షన్ స్థితిని తనిఖీ చేయడానికి ఆధార్ నంబర్ లేదా రేషన్ కార్డుతో sspensions.ap.gov.in లేదా మీ గ్రామ సచివాలయంలో సంప్రదించవచ్చు. అధికారిక హెల్ప్‌లైన్: 1902.",
+        hi: "पेंशन की स्थिति जांचने के लिए आप अपने आधार नंबर के साथ sspensions.ap.gov.in या नजदीकी नागरिक सेवा केंद्र पर संपर्क करें। आधिकारिक हेल्पलाइन: 1902।",
+        ta: "ஓய்வூதிய நிலையை அறிய ஆதார் எண்ணுடன் அதிகாரப்பூர்వ இணையதளம் sspensions.ap.gov.in அல்லது இ-சேவை மையத்தை தொடர்பு கொள்ளவும். உதவி எண்: 1902.",
+        en: "To check your pension status, you can visit sspensions.ap.gov.in or your local Village Secretariat with your Aadhaar or Ration card. Helpline: 1902."
+      };
+      const pensionScheme = SCHEMES.find(s => s.id === "ybr-ntr-pension-ap") || SCHEMES.find(s => s.id === "old-age-pension-national");
+      return {
+        text: statusReplies[lang] || statusReplies.en,
+        isEndCall: false,
+        selectedScheme: pensionScheme,
+        recommendations: [pensionScheme]
+      };
+    }
+
     const pensionReplies = {
       te: "వృద్ధాప్య పెన్షన్ పథకం కింద 60 ఏళ్లు పైబడిన వారికి నెలకు ఆర్థిక సహాయం అందుతుంది. ఆంధ్రప్రదేశ్‌లో ఎన్టీఆర్ భరోసా కింద నెలకు రూ. 4,000 ఇస్తున్నారు. అర్హత కోసం తెల్ల రేషన్ కార్డు మరియు ఆధార్ కార్డు అవసరం. మీ స్థానిక సచివాలయంలో దరఖాస్తు చేసుకోవచ్చు.",
       hi: "वृद्धावस्था पेंशन योजना में 60 वर्ष से अधिक उम्र के नागरिकों को मासिक वित्तीय सहायता मिलती है। इसके लिए आधार कार्ड, बैंक खाता और बीपीएल राशन कार्ड आवश्यक है। आप अपने नजदीकी नागरिक सेवा केंद्र पर आवेदन कर सकते हैं।",
       ta: "முதியோர் ஓய்வூதிய திட்டத்தின் கீழ் 60 வயதுக்கு மேற்பட்டோருக்கு மாதாந்திர உதவித்தொகை வழங்கப்படுகிறது. இதற்கு ஆதார் அட்டை மற்றும் குடும்ப அட்டை தேவை. அருகிலுள்ள இ-சேவை மையத்தில் விண்ணப்பிக்கலாம்.",
       en: "Under the Old Age Pension scheme, senior citizens aged 60 and above receive monthly financial assistance. For example, in AP, NTR Bharosa provides ₹4,000 per month. Required documents are Aadhaar card and Ration card."
     };
-    return { text: pensionReplies[lang] || pensionReplies.en, isEndCall: false };
+    const pensionScheme = SCHEMES.find(s => s.id === "ybr-ntr-pension-ap") || SCHEMES.find(s => s.id === "old-age-pension-national");
+    return {
+      text: pensionReplies[lang] || pensionReplies.en,
+      isEndCall: false,
+      selectedScheme: pensionScheme,
+      recommendations: [pensionScheme]
+    };
   }
 
   // 6. Farmer Schemes
   if (intent === "farmers") {
     const farmerReplies = {
       te: "రైతులకు కేంద్ర ప్రభుత్వం పీఎం-కిసాన్ ద్వారా ఏడాదికి రూ. 6,000 మూడు విడతల్లో నేరుగా బ్యాంక్ ఖాతాలో జమ చేస్తుంది. సొంత భూమి ఉన్న రైతులు ఆధార్ మరియు పట్టాదారు పాస్‌బుక్‌తో pmkisan.gov.in లేదా రైతు భరోసా కేంద్రంలో దరఖాస్తు చేయవచ్చు.",
-      hi: "किसानों के लिए पीएम-किसान योजना के तहत हर साल ₹6,000 की सहायता तीन किश्तों में सीधे बैंक खाते में मिलती है। इसके लिए आधार कार्ड और जमीन के कागजात आवश्यक हैं।",
+      hi: "किसानों के लिए पीएम-किसान योजना के तहत हर साल ₹6,000 की सहायता तीन किश्तों में सीधे बैंक खाते में मिलती है। इसके लिए आधार कार्ड और जमीन के कागजात आवश्यक हैं। pmkisan.gov.in पर आवेदन कर सकते हैं।",
       ta: "விவசாயிகளுக்கு பிஎம்-கிசான் திட்டத்தின் கீழ் ஆண்டுக்கு ₹6,000 மூன்று தவணைகளாக வங்கி கணக்கில் செலுத்தப்படுகிறது. இதற்கு ஆதார் மற்றும் நில ஆவணங்கள் தேவை.",
-      en: "Under PM-KISAN, eligible farmers receive ₹6,000 annually in three equal installments directly into their bank accounts. Required documents are Aadhaar and Land ownership records."
+      en: "Under PM-KISAN, eligible farmers receive ₹6,000 annually in three equal installments directly into their bank accounts. Official portal: pmkisan.gov.in. Required documents are Aadhaar and Land ownership records."
     };
-    return { text: farmerReplies[lang] || farmerReplies.en, isEndCall: false };
+    const farmerSchemes = SCHEMES.filter(s => s.category === "farmers");
+    return {
+      text: farmerReplies[lang] || farmerReplies.en,
+      isEndCall: false,
+      selectedScheme: farmerSchemes[0],
+      recommendations: farmerSchemes
+    };
   }
 
   // 7. Scholarship
@@ -398,6 +500,92 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     };
   }
 
+  // 5b. Scheme Documents inquiry
+  if (intent === "scheme_documents") {
+    if (session) session.interviewMode = false;
+    const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme) || SCHEMES[0];
+    if (session) session.selectedScheme = targetScheme;
+    const docText = getSchemeDetailVoice(targetScheme, "documents", detectedShortLang);
+    return {
+      text: docText,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "scheme_documents",
+      selectedScheme: targetScheme,
+      recommendations: (session && session.recommendations) || [targetScheme]
+    };
+  }
+
+  // 5c. Scheme How to Apply inquiry
+  if (intent === "scheme_apply") {
+    if (session) session.interviewMode = false;
+    const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme) || SCHEMES[0];
+    if (session) session.selectedScheme = targetScheme;
+    const applyText = getSchemeDetailVoice(targetScheme, "apply", detectedShortLang);
+    return {
+      text: applyText,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "scheme_apply",
+      selectedScheme: targetScheme,
+      recommendations: (session && session.recommendations) || [targetScheme]
+    };
+  }
+
+  // 5d. Scheme Summary / Details inquiry
+  if (intent === "scheme_details") {
+    if (session) session.interviewMode = false;
+    const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme);
+    if (targetScheme) {
+      if (session) session.selectedScheme = targetScheme;
+      const detailText = getSchemeDetailVoice(targetScheme, "summary", detectedShortLang);
+      return {
+        text: detailText,
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent: "scheme_details",
+        selectedScheme: targetScheme,
+        recommendations: (session && session.recommendations) || [targetScheme]
+      };
+    }
+  }
+
+  // 5e. Conversational Eligibility Interview & Dynamic Profile Questioning
+  if (session) {
+    session.profile = extractProfileFromText(cleanSpeech, session.profile || {});
+  }
+
+  if (session && (intent === "eligibility_check" || (session.interviewMode && !["pension", "farmers", "scholarship", "certificates", "housing", "health"].includes(intent)))) {
+    const nextQ = getNextEligibilityQuestion(session.profile, detectedShortLang);
+    if (nextQ) {
+      session.profile.lastQuestionAsked = nextQ.field;
+      session.interviewMode = true;
+      return {
+        text: nextQ.text,
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent: "eligibility_interview",
+        profile: session.profile
+      };
+    } else {
+      session.profile.interviewComplete = true;
+      session.interviewMode = false;
+      const recs = recommendSchemes(session.profile, SCHEMES);
+      session.recommendations = recs;
+      session.selectedScheme = recs[0];
+      const spokenText = formatSpokenRecommendation(recs, detectedShortLang);
+      return {
+        text: spokenText,
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent: "recommendation",
+        recommendations: recs.slice(0, 4),
+        profile: session.profile,
+        selectedScheme: recs[0]
+      };
+    }
+  }
+
   // 6. Try LLM response (Groq/OpenAI) if available
   const llmResponse = await callLLMConversation(cleanSpeech, activeTelephonyLang, session);
   if (llmResponse) {
@@ -417,7 +605,9 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     language: activeTelephonyLang,
     isEndCall: false,
     intent,
-    slowPaced: false
+    slowPaced: false,
+    selectedScheme: localRes.selectedScheme || (session && session.selectedScheme) || null,
+    recommendations: localRes.recommendations || (session && session.recommendations) || null
   };
 }
 

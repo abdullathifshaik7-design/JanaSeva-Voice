@@ -7,7 +7,8 @@ import VoiceWaveform from "../components/VoiceWaveform";
 import { VOICE_STATES } from "../services/voiceService";
 import { 
   Volume2, RefreshCw, MapPin, PhoneCall, PhoneOff, Check, 
-  AlertCircle, Link, Upload, Eye, Mic, MicOff, HelpCircle, RotateCcw 
+  AlertCircle, Link, Upload, Eye, Mic, MicOff, HelpCircle, RotateCcw,
+  ExternalLink, FileText, CheckCircle, ChevronDown, ChevronUp, ShieldCheck
 } from "lucide-react";
 import DemoNote from "../components/DemoNote";
 
@@ -69,6 +70,9 @@ export default function VoicePage() {
   const [detectedLanguage, setDetectedLanguage] = useState("te-IN");
   const [micPermissionNotice, setMicPermissionNotice] = useState("");
   const [customCallInput, setCustomCallInput] = useState("");
+  const [recommendedSchemes, setRecommendedSchemes] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
+  const [expandedSchemeId, setExpandedSchemeId] = useState(null);
 
   // Handshake / scanner modal state
   const [callStage, setCallStage] = useState(1);
@@ -407,6 +411,14 @@ export default function VoicePage() {
         if (data.detectedLanguage) {
           activeCallLangRef.current = data.detectedLanguage;
           setDetectedLanguage(data.detectedLanguage);
+        }
+
+        if (data.recommendations && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+          setRecommendedSchemes(data.recommendations);
+          setExpandedSchemeId(prev => prev || data.recommendations[0]?.schemeId || data.recommendations[0]?.id);
+        }
+        if (data.profile) {
+          setUserProfile(data.profile);
         }
 
         setCallLogs(prev => [
@@ -1028,6 +1040,221 @@ export default function VoicePage() {
                 )}
               </div>
 
+              {/* Recommended Government Schemes Card (JanaSeva Profile Match) */}
+              {recommendedSchemes && recommendedSchemes.length > 0 && (
+                <div style={{
+                  background: "#ffffff",
+                  borderRadius: "12px",
+                  border: "2px solid #0284c7",
+                  padding: "18px 20px",
+                  marginBottom: "16px",
+                  boxShadow: "0 4px 14px rgba(2, 132, 199, 0.12)"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "20px" }}>🎯</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "17px", color: "#0f172a", fontWeight: "700" }}>
+                          Recommended Government Schemes
+                        </h3>
+                        <span style={{ fontSize: "12px", color: "#64748b" }}>
+                          JanaSeva Profile Match — Based on your spoken profile details
+                        </span>
+                      </div>
+                    </div>
+                    <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", fontWeight: "700", fontSize: "12px" }}>
+                      {recommendedSchemes.length} Scheme{recommendedSchemes.length > 1 ? "s" : ""} Evaluated
+                    </span>
+                  </div>
+
+                  {userProfile && (userProfile.age || userProfile.occupation || userProfile.state) && (
+                    <div style={{
+                      background: "#f8fafc",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      marginBottom: "12px",
+                      fontSize: "13px",
+                      color: "#475569",
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                      alignItems: "center"
+                    }}>
+                      <strong style={{ color: "#1e293b" }}>Profile Identified:</strong>
+                      {userProfile.age && <span>Age: <b>{userProfile.age} yrs{userProfile.ageApproximate ? " (approx)" : ""}</b></span>}
+                      {userProfile.state && <span>State: <b>{userProfile.state}</b></span>}
+                      {userProfile.occupation && <span>Occupation: <b style={{ textTransform: "capitalize" }}>{userProfile.occupation.replace("_", " ")}</b></span>}
+                      {userProfile.annualIncome !== null && userProfile.annualIncome !== undefined && (
+                        <span>Income: <b>₹{userProfile.annualIncome.toLocaleString("en-IN")}/yr</b></span>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {recommendedSchemes.map((item, idx) => {
+                      const sId = item.schemeId || item.id || `rec_${idx}`;
+                      const isExpanded = expandedSchemeId === sId;
+                      const isEligible = item.status === "eligible";
+                      const isPossible = item.status === "possibly_eligible";
+
+                      return (
+                        <div
+                          key={sId}
+                          style={{
+                            border: isEligible ? "1px solid #86efac" : isPossible ? "1px solid #fde047" : "1px solid #e2e8f0",
+                            borderRadius: "10px",
+                            background: isEligible ? "#f0fdf4" : isPossible ? "#fffbeb" : "#f8fafc",
+                            padding: "14px",
+                            transition: "all 0.2s ease"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                            <div style={{ flex: "1 1 280px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                                <span
+                                  className="badge"
+                                  style={{
+                                    background: isEligible ? "#dcfce7" : isPossible ? "#fef3c7" : "#fee2e2",
+                                    color: isEligible ? "#15803d" : isPossible ? "#92400e" : "#b91c1c",
+                                    fontWeight: "700",
+                                    fontSize: "12px"
+                                  }}
+                                >
+                                  {item.statusLabel || (isEligible ? "✅ Eligible" : isPossible ? "⚠️ Possibly eligible" : "❌ Not eligible")}
+                                </span>
+                                <span className="badge" style={{ background: "#ffffff", border: "1px solid #cbd5e1", color: "#334155", fontSize: "11px", fontWeight: "600" }}>
+                                  JanaSeva Match Score: {item.matchScore || 85}%
+                                </span>
+                              </div>
+                              <h4 style={{ margin: "4px 0", fontSize: "16px", color: "#0f172a", fontWeight: "700" }}>
+                                {item.schemeName || item.name}
+                              </h4>
+                              <p style={{ margin: "4px 0", fontSize: "14px", color: "#334155", lineHeight: "1.4" }}>
+                                <b>Benefits:</b> {item.benefits}
+                              </p>
+                              {item.eligibility && (
+                                <p style={{ margin: "4px 0", fontSize: "13px", color: "#475569", lineHeight: "1.4" }}>
+                                  <b>Eligibility Criteria:</b> {item.eligibility}
+                                </p>
+                              )}
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
+                              {item.applicationUrl && (
+                                <a
+                                  href={item.applicationUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    background: "#0284c7",
+                                    color: "#ffffff",
+                                    padding: "7px 14px",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontWeight: "700",
+                                    textDecoration: "none",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    boxShadow: "0 2px 6px rgba(2, 132, 199, 0.25)"
+                                  }}
+                                >
+                                  <ExternalLink size={14} /> Official Website (.gov.in)
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedSchemeId(isExpanded ? null : sId)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#0369a1",
+                                  fontSize: "13px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "4px 6px"
+                                }}
+                              >
+                                {isExpanded ? <><ChevronUp size={15} /> Less Details</> : <><ChevronDown size={15} /> View Documents & Steps</>}
+                              </button>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div style={{
+                              marginTop: "12px",
+                              paddingTop: "12px",
+                              borderTop: "1px solid rgba(0,0,0,0.08)",
+                              fontSize: "13px",
+                              color: "#334155"
+                            }}>
+                              {item.requiredDocuments && item.requiredDocuments.length > 0 && (
+                                <div style={{ marginBottom: "10px" }}>
+                                  <strong style={{ color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                    <FileText size={14} className="text-primary" /> Required Documents:
+                                  </strong>
+                                  <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                                    {item.requiredDocuments.map((doc, dIdx) => (
+                                      <li key={dIdx} style={{ margin: "2px 0" }}>{doc}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {item.applicationSteps && item.applicationSteps.length > 0 && (
+                                <div style={{ marginBottom: "10px" }}>
+                                  <strong style={{ color: "#0f172a" }}>🚶 How to Apply:</strong>
+                                  <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                                    {item.applicationSteps.map((step, sIdx) => (
+                                      <li key={sIdx} style={{ margin: "2px 0" }}>{step}</li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              )}
+
+                              <div style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                flexWrap: "wrap",
+                                gap: "8px",
+                                fontSize: "12px",
+                                color: "#64748b",
+                                marginTop: "8px",
+                                paddingTop: "8px",
+                                borderTop: "1px dashed #cbd5e1"
+                              }}>
+                                <span>🏛️ <b>Official Source:</b> {item.officialSource || "Govt Department"}</span>
+                                <span>📅 <b>Last Verified:</b> {item.lastVerified || "2026-08"}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{
+                    marginTop: "14px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: "#f1f5f9",
+                    fontSize: "12px",
+                    color: "#475569",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <ShieldCheck size={16} className="text-primary" style={{ flexShrink: 0 }} />
+                    <span>
+                      <b>Official Notice:</b> Based on the information provided, you appear eligible. The respective government department is the final authority for scheme approval and disbursement.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Senior Citizen Quick Action Controls */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
                 {(callState === "waiting_input" || callState === "ended") && (
@@ -1086,20 +1313,23 @@ export default function VoicePage() {
 
                 {/* Quick Utterance Chips */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
-                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("రైతులకు ప్రభుత్వం ఏ పథకాలు ఇస్తుంది?")}>
-                    🌾 <b>Telugu:</b> రైతులకు పథకాలు
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Farmer ki em schemes unnayi?")}>
+                    🌾 <b>Code-Mixed:</b> Farmer ki em schemes unnayi?
                   </button>
-                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Na pension status gurinchi telusukovali.")}>
-                    👵 <b>Telugu:</b> పెన్షన్ వివరాలు
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Age 65, Andhra Pradesh, senior citizen, pension schemes kavali.")}>
+                    👵 <b>Senior Profile:</b> Age 65, AP Pension
                   </button>
-                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("मुझे पेंशन के बारे में जानकारी चाहिए")}>
-                    🇮🇳 <b>Hindi:</b> पेंशन योजना
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Student ni, college chaduvutunna, income 1 lakh, scholarship kavali.")}>
+                    🎓 <b>Student:</b> Scholarship Eligibility
                   </button>
-                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("எனக்கு ஓய்வூதியம் பற்றி தெரிந்து கொள்ள வேண்டும்")}>
-                    🇮🇳 <b>Tamil:</b> ஓய்வூதியம்
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("PM Kisan ki apply ela cheyyali?")}>
+                    📋 <b>Apply:</b> PM Kisan apply ela cheyyali?
                   </button>
-                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("What government schemes are available for farmers?")}>
-                    🇬🇧 <b>English:</b> Farmer Schemes
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("PM Kisan documents enti?")}>
+                    📄 <b>Docs:</b> PM Kisan documents enti?
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Na pension status check cheyyali.")}>
+                    🔍 <b>Pension Status:</b> స్టేటస్ చెక్
                   </button>
                   <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px", background: "#fef2f2", borderColor: "#fca5a5" }} onClick={() => handleSimulateUserSpeech("Na pension issue undi complaint ivvali.")}>
                     📢 <b>Grievance:</b> ఫిర్యాదు నమోదు

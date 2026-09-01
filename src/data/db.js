@@ -53,11 +53,20 @@ export const SCHEMES = [
     ],
     applicationMode: "Both",
     officialWebsite: "https://pmkisan.gov.in",
+    applicationUrl: "https://pmkisan.gov.in",
     officialSource: "Ministry of Agriculture and Farmers Welfare, Govt of India",
     helpline: "155261 / 1800115526",
     lastVerified: "2026-06-15",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 18,
+      maxAge: null,
+      occupations: ["farmer"],
+      maxIncome: 200000,
+      requiresLand: true,
+      states: null
+    },
     simpleExplanation: {
       en: "The government will send ₹2,000 directly to your bank account every four months (total ₹6,000 a year) to help you buy seeds, fertilizers, and farm needs. You must own farming land to apply.",
       te: "ప్రభుత్వం మీకు ప్రతి నాలుగు నెలలకు ₹2,000 చొప్పున (సంవత్సరానికి ₹6,000) నేరుగా బ్యాంకు ఖాతాలో వేస్తుంది. విత్తనాలు, ఎరువుల కొనుగోలుకు ఇది సహాయపడుతుంది. సొంత వ్యవసాయ భూమి ఉన్నవారు అర్హులు.",
@@ -88,11 +97,20 @@ export const SCHEMES = [
     ],
     applicationMode: "Offline",
     officialWebsite: "https://ysrrythubharosa.ap.gov.in",
+    applicationUrl: "https://ysrrythubharosa.ap.gov.in",
     officialSource: "Government of Andhra Pradesh",
     helpline: "1902",
     lastVerified: "2026-05-10",
     languages: ["en", "te"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 18,
+      maxAge: null,
+      occupations: ["farmer", "tenant_farmer"],
+      maxIncome: null,
+      requiresLand: false,
+      states: ["Andhra Pradesh", "AP"]
+    },
     simpleExplanation: {
       en: "Andhra Pradesh farmers receive ₹13,500 every year in three installments for crop investment. Even tenant farmers are eligible if registered properly.",
       te: "ఆంధ్రప్రదేశ్ రైతులకు పంట పెట్టుబడి కోసం ప్రతి సంవత్సరం మూడు విడతలలో ₹13,500 ఇస్తారు. కౌలు రైతులు కూడా దీనికి అర్హులు.",
@@ -123,11 +141,19 @@ export const SCHEMES = [
     ],
     applicationMode: "Both",
     officialWebsite: "https://nsap.nic.in",
+    applicationUrl: "https://nsap.nic.in",
     officialSource: "National Social Assistance Programme",
     helpline: "1800-11-1902",
     lastVerified: "2026-07-01",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 60,
+      maxAge: 120,
+      occupations: ["senior_citizen", "retired", "any"],
+      maxIncome: 120000,
+      states: null
+    },
     simpleExplanation: {
       en: "Senior citizens aged 60+ from BPL households receive a monthly cash pension directly in their accounts to help pay for medicines and personal needs.",
       te: "దారిద్ర్య రేఖకు దిగువన ఉన్న 60 సంవత్సరాలు పైబడిన వృద్ధులకు ప్రతి నెలా కొంత ఆర్థిక సహాయం లభిస్తుంది. మందులు మరియు ఇతర అవసరాలకు ఇది ఉపయోగపడుతుంది.",
@@ -159,11 +185,19 @@ export const SCHEMES = [
     ],
     applicationMode: "Both",
     officialWebsite: "https://sspensions.ap.gov.in",
+    applicationUrl: "https://sspensions.ap.gov.in",
     officialSource: "Government of Andhra Pradesh",
     helpline: "1902",
     lastVerified: "2026-08-01",
     languages: ["en", "te"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 60,
+      maxAge: 120,
+      occupations: ["senior_citizen", "retired", "any"],
+      maxIncome: 144000,
+      states: ["Andhra Pradesh", "AP"]
+    },
     simpleExplanation: {
       en: "Elderly people in Andhra Pradesh receive ₹4,000 every month delivered straight to their doorstep by village volunteers. White ration card is mandatory.",
       te: "ఆంధ్రప్రదేశ్‌లోని వృద్ధులకు ప్రభుత్వం నెలకు ₹4,000 పెన్షన్ ఇస్తుంది. వాలంటీర్ ప్రతి నెలా ఒకటో తేదీన నేరుగా మీ ఇంటికే వచ్చి ఈ డబ్బు అందజేస్తారు.",
@@ -194,11 +228,19 @@ export const SCHEMES = [
     ],
     applicationMode: "Online",
     officialWebsite: "https://scholarships.gov.in",
+    applicationUrl: "https://scholarships.gov.in",
     officialSource: "Govt of India Scholarship Portal",
     helpline: "0120-6619540",
     lastVerified: "2026-08-10",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 15,
+      maxAge: 30,
+      occupations: ["student"],
+      maxIncome: 250000,
+      states: null
+    },
     simpleExplanation: {
       en: "This pays for your college tuition fees and gives you a monthly allowance for books/hostel if your family income is low and you belong to SC/ST/OBC/EWS.",
       te: "పదవ తరగతి పూర్తి చేసి పై చదువులు చదివే పేద విద్యార్థులకు కాలేజీ ఫీజు రియంబర్స్‌మెంట్ లభిస్తుంది మరియు పుస్తకాల కొనుగోలుకు నెలవారీ అలవెన్స్ లభిస్తుంది.",
@@ -229,11 +271,19 @@ export const SCHEMES = [
     ],
     applicationMode: "Offline",
     officialWebsite: "https://pmjay.gov.in",
+    applicationUrl: "https://pmjay.gov.in",
     officialSource: "National Health Authority, Govt of India",
     helpline: "14555",
     lastVerified: "2026-07-20",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 0,
+      maxAge: null,
+      occupations: ["any"],
+      maxIncome: 250000,
+      states: null
+    },
     simpleExplanation: {
       en: "This health card gives you and your family free treatment up to ₹5 Lakhs per year in government and private hospitals for serious illnesses and operations.",
       te: "ఈ కార్డు ఉన్న కుటుంబానికి ప్రతి సంవత్సరం ₹5 లక్షల వరకు ప్రభుత్వ మరియు ప్రైవేట్ ఆసుపత్రులలో ఉచిత వైద్యం లభిస్తుంది. ఆపరేషన్లకు కూడా ఇది వర్తిస్తుంది.",
@@ -264,11 +314,20 @@ export const SCHEMES = [
     ],
     applicationMode: "Both",
     officialWebsite: "https://pmaymis.gov.in",
+    applicationUrl: "https://pmaymis.gov.in",
     officialSource: "Ministry of Housing & Urban Affairs",
     helpline: "1800-11-3377 / 1800-11-6117",
     lastVerified: "2026-08-05",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 18,
+      maxAge: null,
+      occupations: ["any"],
+      maxIncome: 600000,
+      requiresHouseOwner: false,
+      states: null
+    },
     simpleExplanation: {
       en: "Get financial support from the government to build your own brick house or get a low-interest bank loan subsidy if you don't own any other home.",
       te: "మీకు సొంత ఇల్లు లేనట్లయితే, పక్కా ఇల్లు నిర్మించుకోవడానికి ప్రభుత్వం నుండి డబ్బులు లభిస్తాయి లేదా తక్కువ వడ్డీతో గృహ రుణం లభిస్తుంది.",
@@ -299,11 +358,19 @@ export const SCHEMES = [
     ],
     applicationMode: "Offline",
     officialWebsite: "https://nrega.nic.in",
+    applicationUrl: "https://nrega.nic.in",
     officialSource: "Ministry of Rural Development",
     helpline: "1800-11-1555",
     lastVerified: "2026-05-30",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 18,
+      maxAge: null,
+      occupations: ["laborer", "worker", "farmer", "unemployed", "rural_worker"],
+      maxIncome: null,
+      states: null
+    },
     simpleExplanation: {
       en: "Rural households get a guaranteed 100 days of physical labor work near their village with wages paid directly to their bank account every week.",
       te: "గ్రామీణ ప్రాంతాల్లో నివసించే వారికి ప్రతి సంవత్సరం 100 రోజుల పాటు ఉపాధి పనులు లభిస్తాయి. కూలి డబ్బులు ప్రతి వారం నేరుగా బ్యాంకు ఖాతాలో పడతాయి.",
@@ -334,11 +401,20 @@ export const SCHEMES = [
     ],
     applicationMode: "Offline",
     officialWebsite: "https://www.indiapost.gov.in",
+    applicationUrl: "https://www.indiapost.gov.in",
     officialSource: "Post Office India / Ministry of Finance",
     helpline: "1800-266-6868",
     lastVerified: "2026-07-15",
     languages: ["en", "te", "hi", "ta"],
     status: "Active",
+    eligibilityRules: {
+      minAge: 0,
+      maxAge: 10,
+      targetGender: "female",
+      occupations: ["child", "student", "any"],
+      maxIncome: null,
+      states: null
+    },
     simpleExplanation: {
       en: "Save money for your daughter's future education and marriage in this post office scheme. The government gives high interest and tax savings.",
       te: "మీ కూతురి భవిష్యత్తు చదువు మరియు వివాహ ఖర్చుల కోసం పోస్టాఫీసులో పొదుపు పథకం. ప్రభుత్వం అధిక వడ్డీ మరియు పన్ను మినహాయింపు ఇస్తుంది.",
