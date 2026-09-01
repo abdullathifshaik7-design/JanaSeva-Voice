@@ -37,12 +37,6 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleGuestMode = () => {
-    setIsGuest(true);
-    setUser(null);
-    setPage("home");
-  };
-
   const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!loginPhone) {
@@ -230,17 +224,6 @@ export default function LoginPage() {
               >
                 📝 {t("registerBtn") || "Create Account"}
               </button>
-
-              <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "15px", paddingTop: "15px" }}>
-                <button
-                  type="button"
-                  className="secondary-btn w-full"
-                  style={{ padding: "14px", background: "#f8fafc", borderColor: "#cbd5e1", fontSize: "15px", color: "#475569" }}
-                  onClick={handleGuestMode}
-                >
-                  👥 {t("guestBtn") || "Continue as Guest"}
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -557,7 +540,7 @@ export default function LoginPage() {
         )}
 
         <DemoNote>
-          {t("authNote") || "Guest mode allows browsing, voice check, and helpline calls. Registering unlocks historical logs, customized recommendations, and grievance submissions."}
+          {t("authNote") || "Please Login or Create an Account to access JanaSeva Voice, government schemes, voice assistant, and citizen services."}
         </DemoNote>
       </div>
     </div>

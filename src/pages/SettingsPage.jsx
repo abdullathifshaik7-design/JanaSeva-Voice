@@ -31,14 +31,12 @@ export default function SettingsPage() {
     user,
     setUser,
     setIsGuest,
-    setPage
+    setPage,
+    logout
   } = useApp();
 
   const handleLogout = async () => {
-    await authService.signOut();
-    setUser(null);
-    setIsGuest(false);
-    setPage("home");
+    await logout();
   };
 
   const handleRequestGps = () => {

@@ -21,7 +21,8 @@ export default function ProfilePage() {
     complaints,
     feedbacks,
     schemes,
-    setPage
+    setPage,
+    logout
   } = useApp();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -75,10 +76,7 @@ export default function ProfilePage() {
   };
 
   const handleLogout = async () => {
-    await authService.signOut();
-    setUser(null);
-    setIsGuest(false);
-    setPage("home");
+    await logout();
   };
 
   // Filter histories relevant to user profile

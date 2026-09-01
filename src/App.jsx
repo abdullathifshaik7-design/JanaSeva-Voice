@@ -20,6 +20,7 @@ import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import SettingsPage from "./pages/SettingsPage";
+import Logo from "./components/Logo";
 
 function AppContent() {
   const {
@@ -34,26 +35,30 @@ function AppContent() {
     accessOpen,
     setAccessOpen,
     user,
-    isGuest
+    isAuthLoading
   } = useApp();
 
+  // 1. Initial auth state loading screen — prevents flash of protected dashboard
+  if (isAuthLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "14px", background: "#f8fafc" }}>
+        <Logo size={70} showText={false} />
+        <div style={{ color: "#0ea5e9", fontWeight: "900", fontSize: "22px", letterSpacing: "1px" }}>
+          JANASEVA VOICE
+        </div>
+        <div style={{ color: "#64748b", fontSize: "14px", fontWeight: "500" }}>
+          Checking authentication session...
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Strict Authentication Wall: Unauthenticated users MUST login or register first
+  if (!user) {
+    return <LoginPage />;
+  }
+
   const renderPage = () => {
-    // Admin page bypasses citizen login
-    if (page === "admin") {
-      return <AdminPage />;
-    }
-
-    // Force login screen if neither logged in nor guest mode is chosen
-    if (!user && !isGuest) {
-      return <LoginPage />;
-    }
-
-    // Direct guest users trying to access protected paths to Login page
-    const protectedPages = ["profile", "complaints", "status"];
-    if (protectedPages.includes(page) && !user) {
-      return <LoginPage />;
-    }
-
     switch (page) {
       case "home":
         return <HomePage />;
@@ -81,13 +86,14 @@ function AppContent() {
         return <CitizenBenefitsPage />;
       case "help":
         return <NearbyHelpPage />;
+      case "admin":
+        return <AdminPage />;
       default:
         return <HomePage />;
     }
   };
 
-  // Do not show Sidebar or Header on auth screen to keep UX clean
-  const showNavShell = (user || isGuest || page === "admin");
+  const showNavShell = Boolean(user);
 
   return (
     <div className="app-shell">

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { TRANSLATIONS } from "../data/translations";
 import { SCHEMES as INITIAL_SCHEMES, GOVERNMENT_SERVICES as INITIAL_SERVICES, MOCK_APPLICATIONS as INITIAL_APPLICATIONS } from "../data/db";
 import { supabaseService } from "../services/supabaseService";
+import { authService } from "../services/authService";
 import { getTranslatedDbText } from "../data/dbTranslations";
 
 const AppContext = createContext(null);
@@ -34,6 +35,8 @@ export function AppProvider({ children }) {
   const [page, setPage] = useState("home");
   const [voiceTab, setVoiceTab] = useState("assistant");
   const [activeScheme, setActiveScheme] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  
   const [user, setUserState] = useState(() => {
     try {
       const saved = localStorage.getItem("janaseva_user");
@@ -43,13 +46,24 @@ export function AppProvider({ children }) {
     }
   });
 
-  const [isGuest, setIsGuestState] = useState(() => {
+  const [isGuest, setIsGuestState] = useState(false);
+
+  useEffect(() => {
+    // Determine session on initial mount without flash of dashboard
     try {
-      return localStorage.getItem("janaseva_is_guest") === "true";
+      const saved = localStorage.getItem("janaseva_user");
+      if (saved) {
+        setUserState(JSON.parse(saved));
+      } else {
+        setUserState(null);
+      }
+      localStorage.removeItem("janaseva_is_guest");
     } catch (e) {
-      return false;
+      setUserState(null);
+    } finally {
+      setIsAuthLoading(false);
     }
-  });
+  }, []);
 
   const setUser = (val) => {
     setUserState(val);
@@ -64,9 +78,19 @@ export function AppProvider({ children }) {
 
   const setIsGuest = (val) => {
     setIsGuestState(val);
+  };
+
+  const logout = async () => {
     try {
-      localStorage.setItem("janaseva_is_guest", val ? "true" : "false");
+      await authService.signOut();
     } catch (e) {}
+    setUserState(null);
+    setIsGuestState(false);
+    try {
+      localStorage.removeItem("janaseva_user");
+      localStorage.removeItem("janaseva_is_guest");
+    } catch (e) {}
+    setPage("login");
   };
 
   const [language, setLanguageState] = useState(() => {
@@ -381,6 +405,8 @@ export function AppProvider({ children }) {
     setUser,
     isGuest,
     setIsGuest,
+    isAuthLoading,
+    logout,
     userProfile,
     setUserProfile,
     language,
