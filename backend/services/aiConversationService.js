@@ -79,89 +79,191 @@ function matchesAny(text, keywordsList) {
 }
 
 /**
- * Identify user intent and category
+ * Check if the text is a pure affirmation/confirmation
+ */
+export function isAffirmation(text) {
+  const clean = (text || "").toLowerCase().replace(/[.,!?;:]/g, " ").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+
+  // Exact phrase match
+  const phrases = [
+    "avunu cheppu", "avunu cheppandi", "sare cheppu", "sare cheppandi",
+    "ha cheppu", "ha cheppandi", "yes please", "yes cheppu", "yes tell me",
+    "అవును చెప్పండి", "అవును చెప్పు", "సరే చెప్పండి", "సరే చెప్పు", "హా చెప్పండి", "చెప్పండి",
+    "हाँ बताइए", "हाँ बोलो", "हाँ जी", "ठीक है", "बताइए", "बताओ", "जरूर बताओ",
+    "ஆம் சொல்லுங்கள்", "சரி சொல்லுங்கள்"
+  ];
+  if (phrases.some(p => clean.includes(p))) return true;
+
+  // Single word / token match
+  const exactTokens = new Set([
+    "yes", "yeah", "yep", "sure", "okay", "ok", "fine",
+    "avunu", "ha", "haa", "sare", "cheppu", "cheppandi",
+    "అవును", "సరే", "చెప్పు", "హా",
+    "हाँ", "हां", "ज़रूर", "जरूर", "सही",
+    "ஆம்", "சரி", "ஆமாம்"
+  ]);
+
+  return words.some(w => exactTokens.has(w));
+}
+
+/**
+ * Check if the text is a pure negation
+ */
+export function isNegation(text) {
+  const clean = (text || "").toLowerCase().replace(/[.,!?;:]/g, " ").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+
+  const phrases = [
+    "no thanks", "not now", "don't want", "dont want", "nahi chahiye",
+    "వద్దు ధన్యవాదాలు", "ఇప్పుడు వద్దు", "నాకొద్దు", "లేదు వద్దు",
+    "नहीं चाहिए", "मत बताओ", "வேண்டாம் நன்றி"
+  ];
+  if (phrases.some(p => clean.includes(p))) return true;
+
+  const exactTokens = new Set([
+    "no", "nope", "vaddu", "vaddhu", "ledu", "oddu", "oddhu",
+    "వద్దు", "లేదు",
+    "नहीं", "ना", "नही",
+    "இல்லை", "வேண்டாம்"
+  ]);
+
+  return words.some(w => exactTokens.has(w));
+}
+
+/**
+ * Identify user intent and category with strict priority ordering
  */
 export function identifyIntent(text, currentLang = "te") {
-  const lower = (text || "").toLowerCase();
+  if (!text) return { intent: "general_inquiry", category: "general" };
+  const lower = text.toLowerCase().trim();
 
-  // Check end call
+  // 1. END CALL
   for (const langList of Object.values(COMMAND_KEYWORDS.end)) {
     if (matchesAny(lower, langList)) return { intent: "end_call", category: "system" };
   }
 
-  // Check repeat command
+  // 2. REPEAT
   for (const langList of Object.values(COMMAND_KEYWORDS.repeat)) {
     if (matchesAny(lower, langList)) return { intent: "repeat", category: "system" };
   }
 
-  // Check slow command
+  // 3. SLOW
   for (const langList of Object.values(COMMAND_KEYWORDS.slow)) {
     if (matchesAny(lower, langList)) return { intent: "slow", category: "system" };
   }
 
-  // Check help command
+  // 4. HELP
   for (const langList of Object.values(COMMAND_KEYWORDS.help)) {
     if (matchesAny(lower, langList)) return { intent: "help", category: "system" };
   }
 
-  // Check grievance / complaint
+  // 5. GRIEVANCE / COMPLAINT
   for (const langList of Object.values(COMMAND_KEYWORDS.grievance)) {
     if (matchesAny(lower, langList)) return { intent: "grievance", category: "problems" };
   }
 
-  // Check documents inquiry
-  if (matchesAny(lower, ["documents", "document", "documents enti", "kaagithalu", "aadhaar avasarama", "documents chahiye", "dastavez", "pathirangal", "డాక్యుమెంట్లు", "కాగితాలు", "दस्तावेज", "ஆவணங்கள்"])) {
+  // 6. PENSION STATUS (specific status check)
+  if (
+    matchesAny(lower, ["pension", "పెన్షన్", "పించన్", "पेंशन", "ஓய்வூதியம்"]) &&
+    matchesAny(lower, ["status", "check", "స్టేటస్", "చెక్", "जांच", "നില", "స్థితి", "వచ్చిందా", "రాలేదు"])
+  ) {
+    return { intent: "pension_status", category: "pension" };
+  }
+
+  // 7. SPECIFIC CODE-MIXED / SCHEME ACTIONS:
+  // Check documents inquiry (supports "Yes documents cheppu", "Sare documents cheppu", "Documents enti")
+  if (matchesAny(lower, [
+    "documents", "document", "డాక్యుమెంట్లు", "డాక్యుమెంట్", "కాగితాలు", "దస్తావేజులు", "दस्तावेज", "ஆவணங்கள்",
+    "dastavez", "pathirangal", "documents enti", "documents cheppu", "documents kavali", "documents chahiye"
+  ])) {
     return { intent: "scheme_documents", category: "scheme_query" };
   }
 
-  // Check how to apply inquiry
-  if (matchesAny(lower, ["apply", "how to apply", "apply ela", "ela apply", "apply cheyyali", "daraghasthu", "apply kaise", "kaise kare", "eppadi vinnapam", "దరఖాస్తు", "आवेदन कैसे", "ఎలా అప్లై"])) {
+  // Check how to apply inquiry (supports "Yes apply ela?", "Avunu apply ela cheyyali", "Apply ela")
+  if (matchesAny(lower, [
+    "how to apply", "apply ela", "ela apply", "apply cheyyali", "daraghasthu", "apply kaise",
+    "kaise kare", "eppadi vinnapam", "దరఖాస్తు", "आवेदन कैसे", "ఎలా అప్లై", "అప్లై", "apply cheyyadam"
+  ])) {
     return { intent: "scheme_apply", category: "scheme_query" };
   }
 
-  // Check scheme details inquiry
-  if (matchesAny(lower, ["details", "details cheppu", "gurinchi cheppu", "vivaralu", "ke baare mein", "patthi solunga", "వివరాలు", "గురించి చెప్పు", "के बारे में"])) {
-    return { intent: "scheme_details", category: "scheme_query" };
-  }
-
-  // Check Pension
-  if (matchesAny(lower, ["pension", "పెన్షన్", "పించన్", "पेंशन", "ஓய்வూதியம்", "old age", "vridha", "senior", "వృద్ధాప్య"])) {
+  // Check Pension Schemes ("Na pension gurinchi cheppu", "Naaku pension kavali", "Old age pension")
+  if (matchesAny(lower, [
+    "pension", "పెన్షన్", "పించన్", "पेंशन", "ஓய்வூதியம்", "old age", "vridha", "senior", "వృద్ధాప్య", "ntr bharosa", "ఎన్టీఆర్ భరోసా"
+  ])) {
     return { intent: "pension", category: "pension" };
   }
 
-  // Check Farmer / Agriculture
-  if (matchesAny(lower, ["farmer", "rythu", "రైతు", "రైతులు", "किसान", "खेती", "விவசாயி", "pm kisan", "crop", "పంట", "సమ్మాన్"])) {
+  // Check Farmer / Agriculture Schemes ("Farmer ki schemes enti?", "PM Kisan details cheppu", "రైతు పథకాలు")
+  if (matchesAny(lower, [
+    "farmer", "farmers", "rythu", "rythulu", "రైతు", "రైతులు", "రైతుల", "किसान", "खेती", "விவசாயி",
+    "pm kisan", "pm-kisan", "crop", "పంట", "సమ్మాన్", "రైతు భరోసా", "rythu bharosa"
+  ])) {
     return { intent: "farmers", category: "farmers" };
   }
 
   // Check Scholarship / Education
-  if (matchesAny(lower, ["scholarship", "స్కాలర్‌షిప్", "విద్యా", "छात्रवृत्ति", "கல்வி உதவி", "student", "college", "fees"])) {
+  if (matchesAny(lower, [
+    "scholarship", "స్కాలర్‌షిప్", "విద్యా", "छात्रवृत्ति", "கல்வி உதவி", "student", "college", "fees"
+  ])) {
     return { intent: "scholarship", category: "education" };
   }
 
+  // Check Scheme Details / Summary ("details cheppu", "vivaralu", "ke baare mein")
+  if (matchesAny(lower, [
+    "details", "details cheppu", "gurinchi cheppu", "vivaralu", "ke baare mein", "patthi solunga", "వివరాలు", "గురించి చెప్పు", "కే బారే మే"
+  ])) {
+    return { intent: "scheme_details", category: "scheme_query" };
+  }
+
+  // Check Eligibility / Recommendation Request ("Mee schemes kanukkundam", "Check eligibility", "Naku em schemes vastayi", "Farmer ki em schemes unnayi")
+  if (matchesAny(lower, [
+    "suitable", "eligibility", "eligible", "arhulanu", "arhulu", "arhutha",
+    "naku em schemes", "naaku em schemes", "em schemes unnayi", "yojana check",
+    "schemes kanukkundam", "check eligibility", "naaku schemes kavali", "scheme kavali",
+    "schemes unte cheppu", "kya yojana", "kon si yojana", "yojana batayein", "schemes enti",
+    "పథకాలు ఏంటి", "పథకాలు", "पात्र", "पात्रता", "ennaku enna thittam"
+  ])) {
+    return { intent: "eligibility_check", category: "eligibility" };
+  }
+
   // Check Certificates / Documents
-  if (matchesAny(lower, ["certificate", "ధృవీకరణ", "సర్టిఫికెట్", "प्रमाण पत्र", "சான்றிதழ்", "income", "caste", "aadhaar", "pan", "ration", "రేషన్"])) {
+  if (matchesAny(lower, [
+    "certificate", "ధృవీకరణ", "సర్టిఫికెట్", "प्रमाण पत्र", "சான்றிதழ்", "income certificate", "caste certificate", "ration card", "రేషన్ కార్డు"
+  ])) {
     return { intent: "certificates", category: "identity" };
   }
 
   // Check Housing
-  if (matchesAny(lower, ["house", "housing", "pmay", "ఇల్లు", "ఆవాస్", "வீடு", "illu"])) {
+  if (matchesAny(lower, [
+    "house", "housing", "pmay", "ఇల్లు", "ఆవాస్", "వీడు", "illu", "ఇళ్ల పథకం"
+  ])) {
     return { intent: "housing", category: "housing" };
   }
 
   // Check Health
-  if (matchesAny(lower, ["health", "hospital", "ayushman", "ఆరోగ్యం", "చికిత్స", "स्वास्थ्य", "மருத்துவம்"])) {
+  if (matchesAny(lower, [
+    "health", "hospital", "ayushman", "ఆరోగ్యం", "చికిత్స", "स्वास्थ्य", "மருத்துவம்"
+  ])) {
     return { intent: "health", category: "health" };
   }
 
-  // Check eligibility / recommendation check
-  if (matchesAny(lower, ["suitable", "eligibility", "eligible", "arhulanu", "arhulu", "arhutha", "naku em schemes", "naaku em schemes", "em schemes unnayi", "yojana check", "schemes kanukkundam", "check eligibility", "naaku schemes kavali", "scheme kavali", "schemes unte cheppu", "kya yojana", "kon si yojana", "yojana batayein", "पात्र", "पात्रता", "ennaku enna thittam"])) {
-    return { intent: "eligibility_check", category: "eligibility" };
+  // Check Nearby Center
+  if (matchesAny(lower, [
+    "near me", "center", "office", "సమీప", "కేంద్రం", "समीप", "அருகில்", "meeseva", "sachivalayam"
+  ])) {
+    return { intent: "near_me", category: "help" };
   }
 
-  // Check Nearby Center
-  if (matchesAny(lower, ["near me", "center", "office", "సమీప", "కేంద్రం", "समीप", "அருகில்", "meeseva", "sachivalayam"])) {
-    return { intent: "near_me", category: "help" };
+  // 8. AFFIRMATION / CONFIRMATION (pure confirmation without specific intent words)
+  if (isAffirmation(lower)) {
+    return { intent: "confirmation", category: "dialog" };
+  }
+
+  // 9. NEGATION (pure rejection / polite refusal)
+  if (isNegation(lower)) {
+    return { intent: "negation", category: "dialog" };
   }
 
   return { intent: "general_inquiry", category: "general" };
@@ -293,10 +395,10 @@ export function generateLocalPhoneResponse(intent, category, userText, langCode,
     }
 
     const pensionReplies = {
-      te: "వృద్ధాప్య పెన్షన్ పథకం కింద 60 ఏళ్లు పైబడిన వారికి నెలకు ఆర్థిక సహాయం అందుతుంది. ఆంధ్రప్రదేశ్‌లో ఎన్టీఆర్ భరోసా కింద నెలకు రూ. 4,000 ఇస్తున్నారు. అర్హత కోసం తెల్ల రేషన్ కార్డు మరియు ఆధార్ కార్డు అవసరం. మీ స్థానిక సచివాలయంలో దరఖాస్తు చేసుకోవచ్చు.",
+      te: "వృద్ధాప్య పెన్షన్ పథకం కింద 60 ఏళ్లు పైబడిన వారికి నెలకు ఆర్థిక సహాయం అందుతుంది. ఆంధ్రప్రదేశ్‌లో ఎన్టీఆర్ భరోసా కింద నెలకు రూ. 4,000 ఇస్తున్నారు. అర్హత కోసం తెల్ల రేషన్ కార్డు మరియు ఆధార్ కార్డు అవసరం. మీ స్థానిక సచివాలయంలో దరఖాస్తు చేసుకోవచ్చు. అవసరమైన డాక్యుమెంట్లు లేదా దరఖాస్తు విధానం చెప్పమంటారా?",
       hi: "वृद्धावस्था पेंशन योजना में 60 वर्ष से अधिक उम्र के नागरिकों को मासिक वित्तीय सहायता मिलती है। इसके लिए आधार कार्ड, बैंक खाता और बीपीएल राशन कार्ड आवश्यक है। आप अपने नजदीकी नागरिक सेवा केंद्र पर आवेदन कर सकते हैं।",
       ta: "முதியோர் ஓய்வூதிய திட்டத்தின் கீழ் 60 வயதுக்கு மேற்பட்டோருக்கு மாதாந்திர உதவித்தொகை வழங்கப்படுகிறது. இதற்கு ஆதார் அட்டை மற்றும் குடும்ப அட்டை தேவை. அருகிலுள்ள இ-சேவை மையத்தில் விண்ணப்பிக்கலாம்.",
-      en: "Under the Old Age Pension scheme, senior citizens aged 60 and above receive monthly financial assistance. For example, in AP, NTR Bharosa provides ₹4,000 per month. Required documents are Aadhaar card and Ration card."
+      en: "Under the Old Age Pension scheme, senior citizens aged 60 and above receive monthly financial assistance. For example, in AP, NTR Bharosa provides ₹4,000 per month. Required documents are Aadhaar and White Ration card. Would you like to hear the required documents or how to apply?"
     };
     const pensionScheme = SCHEMES.find(s => s.id === "ybr-ntr-pension-ap") || SCHEMES.find(s => s.id === "old-age-pension-national");
     return {
@@ -310,10 +412,10 @@ export function generateLocalPhoneResponse(intent, category, userText, langCode,
   // 6. Farmer Schemes
   if (intent === "farmers") {
     const farmerReplies = {
-      te: "రైతులకు కేంద్ర ప్రభుత్వం పీఎం-కిసాన్ ద్వారా ఏడాదికి రూ. 6,000 మూడు విడతల్లో నేరుగా బ్యాంక్ ఖాతాలో జమ చేస్తుంది. సొంత భూమి ఉన్న రైతులు ఆధార్ మరియు పట్టాదారు పాస్‌బుక్‌తో pmkisan.gov.in లేదా రైతు భరోసా కేంద్రంలో దరఖాస్తు చేయవచ్చు.",
+      te: "రైతులకు కేంద్ర ప్రభుత్వం పీఎం-కిసాన్ ద్వారా ఏడాదికి రూ. 6,000 మూడు విడతల్లో నేరుగా బ్యాంక్ ఖాతాలో జమ చేస్తుంది. సొంత భూమి ఉన్న రైతులు ఆధార్ మరియు పట్టాదారు పాస్‌బుక్‌తో pmkisan.gov.in లేదా రైతు భరోసా కేంద్రంలో దరఖాస్తు చేయవచ్చు. అవసరమైన డాక్యుమెంట్లు చెప్పమంటారా?",
       hi: "किसानों के लिए पीएम-किसान योजना के तहत हर साल ₹6,000 की सहायता तीन किश्तों में सीधे बैंक खाते में मिलती है। इसके लिए आधार कार्ड और जमीन के कागजात आवश्यक हैं। pmkisan.gov.in पर आवेदन कर सकते हैं।",
       ta: "விவசாயிகளுக்கு பிஎம்-கிசான் திட்டத்தின் கீழ் ஆண்டுக்கு ₹6,000 மூன்று தவணைகளாக வங்கி கணக்கில் செலுத்தப்படுகிறது. இதற்கு ஆதார் மற்றும் நில ஆவணங்கள் தேவை.",
-      en: "Under PM-KISAN, eligible farmers receive ₹6,000 annually in three equal installments directly into their bank accounts. Official portal: pmkisan.gov.in. Required documents are Aadhaar and Land ownership records."
+      en: "Under PM-KISAN, eligible farmers receive ₹6,000 annually in three equal installments directly into their bank accounts. Official portal: pmkisan.gov.in. Required documents are Aadhaar and Land records. Would you like to hear the required documents?"
     };
     const farmerSchemes = SCHEMES.filter(s => s.category === "farmers");
     return {
@@ -357,13 +459,17 @@ export function generateLocalPhoneResponse(intent, category, userText, langCode,
     return { text: centerReplies[lang] || centerReplies.en, isEndCall: false };
   }
 
-  // 10. General fallback
+  // 10. General fallback / clarification
   const fallbackReplies = {
-    te: "మీరు అడిగిన విషయానికి సంబంధించి మరింత ఖచ్చితమైన సమాచారం కోసం మీ దగ్గరలోని ప్రభుత్వ కార్యాలయాన్ని లేదా అధికారిక హెల్ప్‌లైన్ 14567 ను సంప్రదించండి. ఇంకేమైనా సమాచారం కావాలా?",
-    hi: "इस विषय की अधिक जानकारी के लिए कृपया अपने नजदीकी सरकारी कार्यालय या आधिकारिक हेल्पलाइन 14567 पर संपर्क करें। क्या मैं किसी और चीज में मदद करूँ?",
-    ta: "இந்த விவரத்திற்கு உங்கள் அருகிலுள்ள அரசு அலுவலகம் அல்லது அதிகாரப்பூர்வ உதவி எண் 14567 ஐ தொடர்பு கொள்ளவும். வேறு ஏதேனும் தகவல் வேண்டுமா?",
-    en: "For specific details on that topic, please visit your nearest government service desk or contact helpline 14567. Can I assist you with any other scheme?"
+    te: "మీరు పెన్షన్ గురించి అడుగుతున్నారా, లేదా రైతు పథకాలు, స్కాలర్‌షిప్ వంటి ఇతర పథకాల గురించి తెలుసుకోవాలా?",
+    hi: "क्या आप पेंशन के बारे में पूछ रहे हैं, या किसान योजना, छात्रवृत्ति जैसी अन्य सरकारी योजनाओं के बारे में जानना चाहते हैं?",
+    ta: "நீங்கள் ஓய்வூதியம் பற்றி கேட்கிறீர்களா, அல்லது பிற அரசு திட்டங்கள் பற்றி அறிய விரும்புகிறீர்களா?",
+    en: "Are you asking about pensions, or would you like to know about farmer schemes, scholarships, or other government services?"
   };
+
+  if (session) {
+    session.lastOffer = "scheme_offer";
+  }
 
   return { text: fallbackReplies[lang] || fallbackReplies.en, isEndCall: false };
 }
@@ -473,13 +579,15 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
 
   console.log(`[Phone AI] Call: ${session?.callId || 'test'} | Detected Lang: ${detectedShortLang} | Speech: "${cleanSpeech}"`);
 
-  // 3. Detect Intent
+  // 3. Detect Intent with strict priority
   const { intent, category } = identifyIntent(cleanSpeech, detectedShortLang);
+
+  let finalResponse = null;
 
   // 4. Handle Polite End Call
   if (intent === "end_call") {
     const farewell = FAREWELL_RESPONSES[detectedShortLang] || FAREWELL_RESPONSES.en;
-    return {
+    finalResponse = {
       text: farewell,
       language: activeTelephonyLang,
       isEndCall: true,
@@ -488,26 +596,96 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     };
   }
 
-  // 5. Check if local deterministic handler handles repeat, slow, help, or grievance
-  if (["repeat", "slow", "help", "grievance"].includes(intent)) {
+  // 5. Repeat Command
+  else if (intent === "repeat") {
     const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
-    return {
+    finalResponse = {
       text: localRes.text,
       language: activeTelephonyLang,
       isEndCall: false,
-      intent,
-      slowPaced: localRes.slowPaced || false
+      intent: "repeat",
+      slowPaced: false
     };
   }
 
-  // 5b. Scheme Documents inquiry
-  if (intent === "scheme_documents") {
+  // 6. Slow Command
+  else if (intent === "slow") {
+    const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
+    finalResponse = {
+      text: localRes.text,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "slow",
+      slowPaced: true
+    };
+  }
+
+  // 7. Help Command
+  else if (intent === "help") {
+    const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
+    if (session) session.lastOffer = "scheme_offer";
+    finalResponse = {
+      text: localRes.text,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "help",
+      slowPaced: false
+    };
+  }
+
+  // 8. Grievance Registration
+  else if (intent === "grievance") {
+    const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
+    finalResponse = {
+      text: localRes.text,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "grievance",
+      trackingId: localRes.trackingId,
+      slowPaced: false
+    };
+  }
+
+  // 9. Pension Status Check ("Na pension status check cheyyali")
+  else if (intent === "pension_status") {
+    const statusReplies = {
+      te: "మీ పెన్షన్ స్థితిని తనిఖీ చేయడానికి ఆధార్ నంబర్ లేదా రేషన్ కార్డుతో sspensions.ap.gov.in లేదా మీ గ్రామ సచివాలయంలో సంప్రదించవచ్చు. అధికారిక హెల్ప్‌లైన్: 1902.",
+      hi: "पेंशन की स्थिति जांचने के लिए आप अपने आधार नंबर के साथ sspensions.ap.gov.in या नजदीकी नागरिक सेवा केंद्र पर संपर्क करें। आधिकारिक हेल्पलाइन: 1902।",
+      ta: "ஓய்வூதிய நிலையை அறிய ஆதార్ எண்ணுடன் அதிகாரப்பூர்வ இணையதளம் sspensions.ap.gov.in அல்லது இ-சேவை மையத்தை தொடர்பு கொள்ளவும். உதவி எண்: 1902.",
+      en: "To check your pension status, you can visit sspensions.ap.gov.in or your local Village Secretariat with your Aadhaar or Ration card. Helpline: 1902."
+    };
+    const pensionScheme = SCHEMES.find(s => s.id === "ybr-ntr-pension-ap") || SCHEMES.find(s => s.id === "old-age-pension-national");
+    if (session) {
+      session.selectedScheme = pensionScheme;
+      session.lastOffer = null;
+    }
+    finalResponse = {
+      text: statusReplies[detectedShortLang] || statusReplies.en,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "pension_status",
+      selectedScheme: pensionScheme,
+      recommendations: [pensionScheme]
+    };
+  }
+
+  // 10. Scheme Documents inquiry (e.g., "Documents enti?", "Yes documents cheppu")
+  else if (intent === "scheme_documents") {
     if (session) session.interviewMode = false;
     const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme) || SCHEMES[0];
-    if (session) session.selectedScheme = targetScheme;
+    if (session) {
+      session.selectedScheme = targetScheme;
+      session.lastOffer = "apply_offer";
+    }
     const docText = getSchemeDetailVoice(targetScheme, "documents", detectedShortLang);
-    return {
-      text: docText,
+    const applyPrompt = {
+      te: " దరఖాస్తు విధానం కూడా తెలుసుకోవాలా?",
+      hi: " क्या आप आवेदन प्रक्रिया भी जानना चाहते हैं?",
+      ta: " விண்ணப்பிக்கும் முறையையும் அறிய விரும்புகிறீர்களா?",
+      en: " Would you also like to know how to apply?"
+    };
+    finalResponse = {
+      text: docText + (applyPrompt[detectedShortLang] || applyPrompt.en),
       language: activeTelephonyLang,
       isEndCall: false,
       intent: "scheme_documents",
@@ -516,13 +694,16 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     };
   }
 
-  // 5c. Scheme How to Apply inquiry
-  if (intent === "scheme_apply") {
-    if (session) session.interviewMode = false;
+  // 11. Scheme How to Apply inquiry (e.g., "Apply ela cheyyali?", "Yes apply ela?")
+  else if (intent === "scheme_apply") {
+    if (session) {
+      session.interviewMode = false;
+      session.lastOffer = null;
+    }
     const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme) || SCHEMES[0];
     if (session) session.selectedScheme = targetScheme;
     const applyText = getSchemeDetailVoice(targetScheme, "apply", detectedShortLang);
-    return {
+    finalResponse = {
       text: applyText,
       language: activeTelephonyLang,
       isEndCall: false,
@@ -532,14 +713,90 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     };
   }
 
-  // 5d. Scheme Summary / Details inquiry
-  if (intent === "scheme_details") {
+  // 12. Specific Pension Inquiries ("Na pension gurinchi cheppu", "Naaku pension kavali")
+  else if (intent === "pension") {
+    if (session) session.interviewMode = false;
+    const pensionScheme = SCHEMES.find(s => s.id === "ybr-ntr-pension-ap") || SCHEMES.find(s => s.id === "old-age-pension-national");
+    if (session) {
+      session.selectedScheme = pensionScheme;
+      session.lastOffer = "documents_offer";
+    }
+    const pensionReplies = {
+      te: "వృద్ధాప్య పెన్షన్ పథకం కింద 60 ఏళ్లు పైబడిన వారికి నెలకు ఆర్థిక సహాయం అందుతుంది. ఆంధ్రప్రదేశ్‌లో ఎన్టీఆర్ భరోసా కింద నెలకు రూ. 4,000 ఇస్తున్నారు. అర్హత కోసం తెల్ల రేషన్ కార్డు మరియు ఆధార్ కార్డు అవసరం. అవసరమైన డాక్యుమెంట్లు చెప్పమంటారా?",
+      hi: "वृद्धावस्था पेंशन योजना में 60 वर्ष से अधिक उम्र के नागरिकों को मासिक वित्तीय सहायता (एनटीआर भरोसा के तहत ₹4,000) मिलती है। इसके लिए आधार कार्ड और राशन कार्ड आवश्यक है। क्या आप इसके आवश्यक दस्तावेज जानना चाहते हैं?",
+      ta: "முதியோர் ஓய்வூதிய திட்டத்தின் கீழ் 60 வயதுக்கு மேற்பட்டோருக்கு மாதாந்திர உதவித்தொகை வழங்கப்படுகிறது. இதற்கு தேவையான ஆவணங்களை அறிய விரும்புகிறீர்களா?",
+      en: "Under the Old Age Pension scheme, senior citizens aged 60 and above receive monthly financial assistance (₹4,000/month under NTR Bharosa). Required documents are Aadhaar and Ration card. Would you like to hear the required documents?"
+    };
+    finalResponse = {
+      text: pensionReplies[detectedShortLang] || pensionReplies.en,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "pension",
+      selectedScheme: pensionScheme,
+      recommendations: [pensionScheme]
+    };
+  }
+
+  // 13. Specific Farmer Inquiries ("Farmer ki schemes enti?", "PM Kisan details cheppu")
+  else if (intent === "farmers") {
+    if (session) session.interviewMode = false;
+    const farmerSchemes = SCHEMES.filter(s => s.category === "farmers");
+    const farmerScheme = farmerSchemes[0] || SCHEMES[0];
+    if (session) {
+      session.selectedScheme = farmerScheme;
+      session.lastOffer = "documents_offer";
+    }
+    const farmerReplies = {
+      te: "రైతులకు కేంద్ర ప్రభుత్వం పీఎం-కిసాన్ ద్వారా ఏడాదికి రూ. 6,000 మరియు ఏపీలో రైతు భరోసా కింద ఆర్థిక సాయం అందిస్తోంది. అధికారిక పోర్టల్ pmkisan.gov.in. అవసరమైన డాక్యుమెంట్లు చెప్పమంటారా?",
+      hi: "किसानों के लिए पीएम-किसान योजना के तहत हर साल ₹6,000 की सहायता तीन किश्तों में सीधे बैंक खाते में मिलती है। आधिकारिक पोर्टल pmkisan.gov.in है। क्या आप आवश्यक दस्तावेज जानना चाहते हैं?",
+      ta: "விவசாயிகளுக்கு பிஎம்-கிசான் திட்டத்தின் கீழ் ஆண்டுக்கு ₹6,000 மூன்று தவணைகளாக வங்கி கணக்கில் செலுத்தப்படுகிறது. தேவையான ஆவணங்களை அறிய விரும்புகிறீர்களா?",
+      en: "Under PM-KISAN, eligible farmers receive ₹6,000 annually in three installments on pmkisan.gov.in. Required documents are Aadhaar and Land ownership records. Would you like to hear the required documents?"
+    };
+    finalResponse = {
+      text: farmerReplies[detectedShortLang] || farmerReplies.en,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "farmers",
+      selectedScheme: farmerScheme,
+      recommendations: farmerSchemes
+    };
+  }
+
+  // 14. Scholarship Inquiries
+  else if (intent === "scholarship") {
+    if (session) session.interviewMode = false;
+    const scholarScheme = SCHEMES.find(s => s.id === "post-matric-scholarship") || SCHEMES[4];
+    if (session) {
+      session.selectedScheme = scholarScheme;
+      session.lastOffer = "documents_offer";
+    }
+    const scholarshipReplies = {
+      te: "పోస్ట్ మెట్రిక్ స్కాలర్‌షిప్ పథకం ద్వారా 10వ తరగతి తర్వాతి విద్యార్థులకు 100% ట్యూషన్ ఫీజు రీయింబర్స్మెంట్ మరియు అలవెన్స్ లభిస్తుంది. scholarships.gov.in లో దరఖాస్తు చేసుకోవచ్చు. అవసరమైన డాక్యుమెంట్లు చెప్పమంటారా?",
+      hi: "पोस्ट मैट्रिक छात्रवृत्ति योजना 10वीं के बाद के छात्रों को फीस प्रतिपूर्ति और भत्ता प्रदान करती है। scholarships.gov.in पर आवेदन कर सकते हैं। क्या आप दस्तावेज जानना चाहते हैं?",
+      ta: "போஸ்ட் மெட்ரிக் உதவித்தொகை திட்டம் மாணவர்களுக்கு கல்வி கட்டண சலுகை வழங்குகிறது. தேவையான ஆவணங்களை அறிய விரும்புகிறீர்களா?",
+      en: "Post Matric Scholarship provides 100% tuition fee reimbursement and monthly allowances on scholarships.gov.in. Would you like to hear the required documents?"
+    };
+    finalResponse = {
+      text: scholarshipReplies[detectedShortLang] || scholarshipReplies.en,
+      language: activeTelephonyLang,
+      isEndCall: false,
+      intent: "scholarship",
+      selectedScheme: scholarScheme,
+      recommendations: [scholarScheme]
+    };
+  }
+
+  // 15. Scheme Details / Summary inquiry
+  else if (intent === "scheme_details") {
     if (session) session.interviewMode = false;
     const targetScheme = findSchemeByQuery(cleanSpeech) || (session && session.selectedScheme);
     if (targetScheme) {
-      if (session) session.selectedScheme = targetScheme;
+      if (session) {
+        session.selectedScheme = targetScheme;
+        session.lastOffer = "documents_offer";
+      }
       const detailText = getSchemeDetailVoice(targetScheme, "summary", detectedShortLang);
-      return {
+      finalResponse = {
         text: detailText,
         language: activeTelephonyLang,
         isEndCall: false,
@@ -550,65 +807,262 @@ export async function processPhoneSpeechTurn(userSpeech, session) {
     }
   }
 
-  // 5e. Conversational Eligibility Interview & Dynamic Profile Questioning
-  if (session) {
-    session.profile = extractProfileFromText(cleanSpeech, session.profile || {});
+  // 16. AFFIRMATIVE / CONFIRMATION RESPONSES ("Yes", "Avunu", "Avunu cheppu", "Ha", "Sare", "Sure", "Okay")
+  else if (intent === "confirmation") {
+    // Context 1: Prior assistant offer was to read documents
+    if (session && session.lastOffer === "documents_offer") {
+      const targetScheme = session.selectedScheme || SCHEMES[0];
+      const docText = getSchemeDetailVoice(targetScheme, "documents", detectedShortLang);
+      const applyPrompt = {
+        te: " దరఖాస్తు విధానం కూడా తెలుసుకోవాలా?",
+        hi: " क्या आप आवेदन प्रक्रिया भी जानना चाहते हैं?",
+        ta: " விண்ணப்பிக்கும் முறையையும் அறிய விரும்புகிறீர்களா?",
+        en: " Would you also like to know how to apply?"
+      };
+      session.lastOffer = "apply_offer";
+      finalResponse = {
+        text: docText + (applyPrompt[detectedShortLang] || applyPrompt.en),
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent: "scheme_documents",
+        selectedScheme: targetScheme,
+        recommendations: session.recommendations || [targetScheme]
+      };
+    }
+    // Context 2: Prior assistant offer was to read application steps
+    else if (session && session.lastOffer === "apply_offer") {
+      const targetScheme = session.selectedScheme || SCHEMES[0];
+      const applyText = getSchemeDetailVoice(targetScheme, "apply", detectedShortLang);
+      session.lastOffer = null;
+      finalResponse = {
+        text: applyText,
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent: "scheme_apply",
+        selectedScheme: targetScheme,
+        recommendations: session.recommendations || [targetScheme]
+      };
+    }
+    // Context 3: In an active interview answering a binary question (e.g. land ownership)
+    else if (session && session.interviewMode && session.profile && session.profile.lastQuestionAsked === "landOwner") {
+      session.profile.landOwner = true;
+      session.profile.lastQuestionAsked = null;
+      const nextQ = getNextEligibilityQuestion(session.profile, detectedShortLang);
+      if (nextQ) {
+        session.profile.lastQuestionAsked = nextQ.field;
+        finalResponse = {
+          text: nextQ.text,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "eligibility_interview",
+          profile: session.profile
+        };
+      } else {
+        session.profile.interviewComplete = true;
+        session.interviewMode = false;
+        const recs = recommendSchemes(session.profile, SCHEMES);
+        session.recommendations = recs;
+        session.selectedScheme = recs[0];
+        session.lastOffer = "documents_offer";
+        const spokenText = formatSpokenRecommendation(recs, detectedShortLang);
+        finalResponse = {
+          text: spokenText,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "recommendation",
+          recommendations: recs.slice(0, 4),
+          profile: session.profile,
+          selectedScheme: recs[0]
+        };
+      }
+    }
+    // Context 4: General confirmation or after a scheme offer ("Can I assist you with some schemes?" -> "Yes")
+    else {
+      if (session) {
+        session.profile = session.profile || createEmptyProfile();
+        session.interviewMode = true;
+        session.lastOffer = null;
+      }
+      const nextQ = getNextEligibilityQuestion(session?.profile || createEmptyProfile(), detectedShortLang);
+      if (nextQ) {
+        if (session && session.profile) {
+          session.profile.lastQuestionAsked = nextQ.field;
+          session.profile.interviewStarted = true;
+        }
+        const confirmIntro = {
+          te: `సరేనండి. ${nextQ.text}`,
+          hi: `ज़रूर। ${nextQ.text}`,
+          ta: `நிச்சயமாக. ${nextQ.text}`,
+          en: `Sure. ${nextQ.text}`
+        };
+        finalResponse = {
+          text: confirmIntro[detectedShortLang] || confirmIntro.en,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "eligibility_interview",
+          profile: session?.profile
+        };
+      } else {
+        const recs = recommendSchemes(session?.profile || {}, SCHEMES);
+        if (session) {
+          session.recommendations = recs;
+          session.selectedScheme = recs[0];
+          session.lastOffer = "documents_offer";
+        }
+        finalResponse = {
+          text: formatSpokenRecommendation(recs, detectedShortLang),
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "recommendation",
+          recommendations: recs.slice(0, 4),
+          profile: session?.profile,
+          selectedScheme: recs[0]
+        };
+      }
+    }
   }
 
-  if (session && (intent === "eligibility_check" || (session.interviewMode && !["pension", "farmers", "scholarship", "certificates", "housing", "health"].includes(intent)))) {
-    const nextQ = getNextEligibilityQuestion(session.profile, detectedShortLang);
-    if (nextQ) {
-      session.profile.lastQuestionAsked = nextQ.field;
-      session.interviewMode = true;
-      return {
-        text: nextQ.text,
-        language: activeTelephonyLang,
-        isEndCall: false,
-        intent: "eligibility_interview",
-        profile: session.profile
-      };
+  // 17. NEGATION / DECLINE ("No", "No thanks", "Vaddu", "Ledu", "Nahi", "వద్దు", "లేదు")
+  else if (intent === "negation") {
+    // If in an active interview answering landOwner question
+    if (session && session.interviewMode && session.profile && session.profile.lastQuestionAsked === "landOwner") {
+      session.profile.landOwner = false;
+      session.profile.lastQuestionAsked = null;
+      const nextQ = getNextEligibilityQuestion(session.profile, detectedShortLang);
+      if (nextQ) {
+        session.profile.lastQuestionAsked = nextQ.field;
+        finalResponse = {
+          text: nextQ.text,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "eligibility_interview",
+          profile: session.profile
+        };
+      } else {
+        session.profile.interviewComplete = true;
+        session.interviewMode = false;
+        const recs = recommendSchemes(session.profile, SCHEMES);
+        session.recommendations = recs;
+        session.selectedScheme = recs[0];
+        session.lastOffer = "documents_offer";
+        finalResponse = {
+          text: formatSpokenRecommendation(recs, detectedShortLang),
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "recommendation",
+          recommendations: recs.slice(0, 4),
+          profile: session.profile,
+          selectedScheme: recs[0]
+        };
+      }
     } else {
-      session.profile.interviewComplete = true;
-      session.interviewMode = false;
-      const recs = recommendSchemes(session.profile, SCHEMES);
-      session.recommendations = recs;
-      session.selectedScheme = recs[0];
-      const spokenText = formatSpokenRecommendation(recs, detectedShortLang);
-      return {
-        text: spokenText,
+      if (session) {
+        session.interviewMode = false;
+        session.lastOffer = null;
+      }
+      const politeDecline = {
+        te: "సరేనండి. మీకు ఇతర ప్రభుత్వ పథకాలు లేదా సేవల గురించి ఏదైనా సమాచారం కావాలంటే అడగవచ్చు.",
+        hi: "ठीक है जी। यदि आपको किसी अन्य सरकारी योजना या सेवा के बारे में जानकारी चाहिए, तो कृपया पूछें।",
+        ta: "சரிங்க. வேறு ஏதேனும் அரசு திட்டம் அல்லது சேவை பற்றி தகவல் தேவைப்பட்டால் கேளுங்கள்.",
+        en: "Sure. Please let me know if you need help with any other government scheme or service."
+      };
+      finalResponse = {
+        text: politeDecline[detectedShortLang] || politeDecline.en,
         language: activeTelephonyLang,
         isEndCall: false,
-        intent: "recommendation",
-        recommendations: recs.slice(0, 4),
-        profile: session.profile,
-        selectedScheme: recs[0]
+        intent: "negation"
       };
     }
   }
 
-  // 6. Try LLM response (Groq/OpenAI) if available
-  const llmResponse = await callLLMConversation(cleanSpeech, activeTelephonyLang, session);
-  if (llmResponse) {
-    return {
-      text: llmResponse,
+  // 18. Conversational Eligibility Interview & Dynamic Profile Questioning
+  if (!finalResponse) {
+    if (session) {
+      session.profile = extractProfileFromText(cleanSpeech, session.profile || {});
+    }
+
+    if (session && (intent === "eligibility_check" || (session.interviewMode && !["certificates", "housing", "health"].includes(intent)))) {
+      const nextQ = getNextEligibilityQuestion(session.profile, detectedShortLang);
+      if (nextQ) {
+        session.profile.lastQuestionAsked = nextQ.field;
+        session.interviewMode = true;
+        session.lastOffer = null;
+        finalResponse = {
+          text: nextQ.text,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "eligibility_interview",
+          profile: session.profile
+        };
+      } else {
+        session.profile.interviewComplete = true;
+        session.interviewMode = false;
+        const recs = recommendSchemes(session.profile, SCHEMES);
+        session.recommendations = recs;
+        session.selectedScheme = recs[0];
+        session.lastOffer = "documents_offer";
+        const spokenText = formatSpokenRecommendation(recs, detectedShortLang);
+        finalResponse = {
+          text: spokenText,
+          language: activeTelephonyLang,
+          isEndCall: false,
+          intent: "recommendation",
+          recommendations: recs.slice(0, 4),
+          profile: session.profile,
+          selectedScheme: recs[0]
+        };
+      }
+    }
+  }
+
+  // 19. Try LLM response (Groq/OpenAI) if available
+  if (!finalResponse) {
+    const llmResponse = await callLLMConversation(cleanSpeech, activeTelephonyLang, session);
+    if (llmResponse) {
+      finalResponse = {
+        text: llmResponse,
+        language: activeTelephonyLang,
+        isEndCall: false,
+        intent,
+        slowPaced: false
+      };
+    }
+  }
+
+  // 20. Deterministic local scheme intelligence fallback
+  if (!finalResponse) {
+    const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
+    finalResponse = {
+      text: localRes.text,
       language: activeTelephonyLang,
       isEndCall: false,
       intent,
-      slowPaced: false
+      slowPaced: false,
+      selectedScheme: localRes.selectedScheme || (session && session.selectedScheme) || null,
+      recommendations: localRes.recommendations || (session && session.recommendations) || null
     };
   }
 
-  // 7. Deterministic local scheme intelligence fallback
-  const localRes = generateLocalPhoneResponse(intent, category, cleanSpeech, activeTelephonyLang, session);
-  return {
-    text: localRes.text,
-    language: activeTelephonyLang,
-    isEndCall: false,
-    intent,
-    slowPaced: false,
-    selectedScheme: localRes.selectedScheme || (session && session.selectedScheme) || null,
-    recommendations: localRes.recommendations || (session && session.recommendations) || null
-  };
+  // 21. GUARD AGAINST IDENTICAL CONSECUTIVE ASSISTANT RESPONSES
+  let responseText = finalResponse.text;
+  if (session && session.lastResponse && session.lastResponse.trim() === responseText.trim()) {
+    const clarificationReplies = {
+      te: "క్షమించండి, మీ ప్రశ్న సరిగ్గా అర్థం కాలేదు. మీరు పెన్షన్, రైతు పథకాలు, అవసరమైన డాక్యుమెంట్లు లేదా దరఖాస్తు విధానం గురించి అడగవచ్చు. మీకు ఏ సమాచారం కావాలి?",
+      hi: "क्षमा करें, आपका प्रश्न ठीक से समझ नहीं आया। आप पेंशन, किसान योजना, दस्तावेज या आवेदन प्रक्रिया के बारे में पूछ सकते हैं। आपको क्या जानकारी चाहिए?",
+      ta: "மன்னிக்கவும், உங்கள் கேள்வி தெளிவாக புரியவில்லை. ஓய்வூதியம், விவசாய திட்டம், ஆவணங்கள் அல்லது விண்ணப்ப முறை பற்றி நீங்கள் கேட்கலாம். என்ன உதவி வேண்டும்?",
+      en: "I apologize, I didn't catch that clearly. You can ask about pensions, farmer schemes, required documents, or application steps. How can I help you?"
+    };
+    responseText = clarificationReplies[detectedShortLang] || clarificationReplies.en;
+    finalResponse.text = responseText;
+    session.lastOffer = "scheme_offer";
+  }
+
+  // 22. Save response into session memory
+  if (session) {
+    session.lastResponse = responseText;
+  }
+
+  return finalResponse;
 }
 
 export default {
