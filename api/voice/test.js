@@ -16,7 +16,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { callId, text, language } = req.body || {};
+    const rawBody = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const { callId, text, language } = rawBody;
 
     const result = await handleSimulationTurn({
       callId,

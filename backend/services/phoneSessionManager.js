@@ -27,7 +27,10 @@ class PhoneSessionManager {
 
     // Periodic cleanup interval every 5 minutes
     if (typeof setInterval !== "undefined") {
-      setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
+      const timer = setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
+      if (timer && typeof timer.unref === "function") {
+        timer.unref();
+      }
     }
   }
 
