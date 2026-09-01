@@ -42,20 +42,25 @@ const SCRIPT_PATTERNS = {
 // Transliterated keyword dictionaries for phonetic / Romanized speech
 const TRANSLITERATION_KEYWORDS = {
   te: [
-    "naaku", "nenu", "kavali", "telusukovali", "gurinchi", "cheppandi", "cheppu",
-    "unnaya", "schemes emaina", "rythu", "pension", "pathakam", "yojana",
-    "ardham", "malli", "sahayam", "dhanyavadalu", "namaskaram", "samasya",
-    "vastundi", "vastayi", "eppudu", "ela", "yentha", "dharakhasthu", "telugu"
+    "naaku", "naku", "nenu", "na", "kavali", "telusukovali", "gurinchi", "gurunchi", "cheppandi", "cheppu",
+    "unnayi", "unnaya", "untanu", "rythu", "pathakam", "ardham", "sahayam", "namaskaram", "samasya",
+    "vastundi", "vastayi", "eppudu", "ela", "entha", "yentha", "daraghasthu", "dharakhasthu", "telugu",
+    "avunu", "sare", "meeru", "enti", "kosam", "babu", "emaina", "kaadhu", "ledu", "vaddu"
   ],
   hi: [
-    "mujhe", "mera", "meri", "humko", "chahiye", "batao", "bataiye", "jaankari",
-    "kya", "kaise", "kab", "yojana", "pension", "kisan", "sarkari", "samajh",
-    "phir", "madad", "dhanyawad", "namaste", "shikayat", "shukriya", "hindi"
+    "mujhe", "mera", "meri", "humko", "chahiye", "batao", "bataiye", "jankari", "jaankari",
+    "kya", "kaise", "kab", "kitna", "kisan", "sarkari", "samajh", "madad", "dhanyawad",
+    "namaste", "shikayat", "shukriya", "hindi", "haan", "baare", "mein", "karo", "karna", "nahi", "nahin"
   ],
   ta: [
-    "enakku", "enaku", "nan", "theriya", "solunga", "solli", "thittam", "vivasayi",
-    "oothiyum", "oiyvoothiyam", "puriyala", "marubadiyum", "udavi", "vanakkam",
-    "nandri", "tamil", "eppadi", "kidaikkum", "irukku", "thevai"
+    "enakku", "enaku", "nan", "theriya", "sollunga", "solli", "thittam", "vivasayi", "puriyala",
+    "udavi", "vanakkam", "nandri", "tamil", "eppadi", "epdi", "kidaikkum", "irukku", "thevai",
+    "venum", "enna", "pathirangal"
+  ],
+  en: [
+    "what", "how", "where", "which", "please", "tell", "want", "need", "available", "apply",
+    "schemes", "government", "documents", "document", "who", "eligible", "eligibility",
+    "application", "help", "repeat", "slow", "hello", "give", "can", "goodbye"
   ]
 };
 
@@ -73,7 +78,7 @@ export function detectLanguage(text, fallbackLangCode = "en") {
   const trimmed = text.trim();
   if (!trimmed) return fallbackLangCode;
 
-  // 1. Check native Unicode scripts
+  // 1. Check native Unicode scripts directly
   for (const [lang, regex] of Object.entries(SCRIPT_PATTERNS)) {
     if (regex.test(trimmed)) {
       return lang;
@@ -82,9 +87,9 @@ export function detectLanguage(text, fallbackLangCode = "en") {
 
   // 2. Check transliterated Romanized keywords
   const lower = trimmed.toLowerCase();
-  const words = lower.split(/\s+/);
+  const words = lower.split(/\s+/).filter(Boolean);
 
-  const scores = { te: 0, hi: 0, ta: 0 };
+  const scores = { te: 0, hi: 0, ta: 0, en: 0 };
 
   for (const [lang, keywords] of Object.entries(TRANSLITERATION_KEYWORDS)) {
     for (const kw of keywords) {
@@ -97,12 +102,21 @@ export function detectLanguage(text, fallbackLangCode = "en") {
     }
   }
 
-  const highestLang = Object.keys(scores).reduce((a, b) => (scores[a] > scores[b] ? a : b));
-  if (scores[highestLang] > 0) {
-    return highestLang;
+  // Indian languages take precedence if they have explicit matches
+  if (scores.te > 0 && scores.te >= scores.hi && scores.te >= scores.ta && scores.te >= scores.en) {
+    return "te";
+  }
+  if (scores.hi > 0 && scores.hi >= scores.te && scores.hi >= scores.ta && scores.hi >= scores.en) {
+    return "hi";
+  }
+  if (scores.ta > 0 && scores.ta >= scores.te && scores.ta >= scores.hi && scores.ta >= scores.en) {
+    return "ta";
+  }
+  if (scores.en > 0 && scores.te === 0 && scores.hi === 0 && scores.ta === 0) {
+    return "en";
   }
 
-  // Default fallback if no Indian language patterns match
+  // Default fallback if no clear language pattern matches
   return fallbackLangCode;
 }
 

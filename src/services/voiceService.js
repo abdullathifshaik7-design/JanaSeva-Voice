@@ -100,15 +100,25 @@ export function detectLanguage(text) {
   const lower = text.toLowerCase();
   
   // Telugu keywords
-  if (containsAny(lower, ["nenu", "student ni", "naaku", "unnaya", "schemes emaina", "kavali", "rythu", "telugu", "vastayi", "cheppandi"])) {
+  if (containsAny(lower, [
+    "nenu", "student ni", "naaku", "naku", "na pension", "unnaya", "unnayi", "untanu", "schemes emaina",
+    "kavali", "rythu", "telugu", "vastayi", "vastundi", "cheppandi", "cheppu", "gurinchi", "gurunchi",
+    "telusukovali", "ardham", "avunu", "sare", "meeru", "daraghasthu", "yentha", "entha"
+  ])) {
     return "te";
   }
   // Hindi keywords
-  if (containsAny(lower, ["main ek", "chahiye", "hai", "hu", "kya", "yojana", "mujhe", "batao", "kaise"])) {
+  if (containsAny(lower, [
+    "main ek", "chahiye", "hai", "hu", "kya", "yojana", "mujhe", "mera", "meri", "batao", "bataiye",
+    "kaise", "jankari", "jaankari", "baare mein", "shikayat", "namaste", "dhanyawad"
+  ])) {
     return "hi";
   }
   // Tamil keywords
-  if (containsAny(lower, ["nan", "enakku", "manavan", "kidaikkum", "irukki", "tamil"])) {
+  if (containsAny(lower, [
+    "nan", "enakku", "enaku", "manavan", "kidaikkum", "irukki", "irukku", "tamil", "sollunga",
+    "solli", "epdi", "eppadi", "thittam", "thevai", "vanakkam"
+  ])) {
     return "ta";
   }
   // Malayalam keywords

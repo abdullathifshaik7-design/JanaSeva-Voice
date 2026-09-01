@@ -21,6 +21,7 @@ export function useVoiceAssistant() {
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
   const accumulatedTranscriptRef = useRef("");
+  const latestTranscriptRef = useRef("");
   const languageRef = useRef(language);
 
   // Timers for silence and safety checks
@@ -211,6 +212,7 @@ export function useVoiceAssistant() {
         const display = currentFull + (interimTranscript ? " " + interimTranscript : "");
         
         if (display) {
+          latestTranscriptRef.current = display;
           setTranscript(display);
           console.log(`[VOICE] Result: ${display}`);
 
@@ -230,13 +232,13 @@ export function useVoiceAssistant() {
         }
 
         if (finalTranscript) {
-          accumulatedTranscriptRef.current += finalTranscript;
+          accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? " " : "") + finalTranscript;
         }
       };
 
       recognition.onend = async () => {
         console.log("Recognition ended callback");
-        const finalResult = accumulatedTranscriptRef.current.trim();
+        const finalResult = (accumulatedTranscriptRef.current || latestTranscriptRef.current || "").trim();
         
         cleanupRecognition();
         

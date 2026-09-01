@@ -159,19 +159,17 @@ export default function VoicePage() {
   const speakWithBrowserTTS = (text, langCode) => {
     return new Promise((resolve) => {
       if (!text || typeof text !== "string" || !text.trim()) {
-        console.debug("[JanaSeva Diagnostic] TTS SKIPPED (empty text)");
         return resolve({ spoken: false });
       }
 
       if (!window.speechSynthesis) {
-        console.warn("[JanaSeva Diagnostic] speechSynthesis not available");
+        console.warn("[JanaSeva Voice ERROR] speechSynthesis not available");
         return resolve({ spoken: false });
       }
 
-      // Cancel any queued utterances to avoid blocking
+      // 1. Cancel any existing TTS to avoid queue blocking
       window.speechSynthesis.cancel();
 
-      console.debug("[JanaSeva Diagnostic] TTS START. Lang:", langCode, "Text:", text.substring(0, 40) + "...");
       isTtsSpeakingRef.current = true;
       setCallState("speaking");
 
@@ -185,36 +183,31 @@ export default function VoicePage() {
 
       utterance.lang = targetLang;
       utterance.rate = 0.9;
+      console.log("[JanaSeva Voice] TTS language:", targetLang);
 
       let finished = false;
       const finish = () => {
         if (finished) return;
         finished = true;
         isTtsSpeakingRef.current = false;
-        console.debug("[JanaSeva Diagnostic] TTS END");
+        console.log("[JanaSeva Voice] TTS ended");
         resolve({ spoken: true });
       };
 
-      utterance.onstart = () => {
-        console.debug("[JanaSeva Diagnostic] TTS ONSTART");
-      };
-
       utterance.onend = () => {
-        console.debug("[JanaSeva Diagnostic] TTS ONEND");
         finish();
       };
 
       utterance.onerror = (e) => {
-        console.warn("[JanaSeva Diagnostic] TTS ONERROR:", e.error);
+        console.warn("[JanaSeva Voice ERROR] TTS error:", e.error);
         finish();
       };
 
-      // Safety timeout in case browser TTS stalls
+      // Safety timer in case browser TTS stalls
       const words = text.trim().split(/\s+/).length;
       const maxTimeout = Math.max(6000, words * 600);
       setTimeout(() => {
         if (!finished) {
-          console.debug("[JanaSeva Diagnostic] TTS safety timer expired");
           try { window.speechSynthesis.cancel(); } catch (e) {}
           finish();
         }
@@ -257,32 +250,20 @@ export default function VoicePage() {
   };
 
   const startListeningTurn = () => {
-    if (!isCallActiveRef.current) {
-      console.debug("[JanaSeva Diagnostic] Call not active, skipping listening turn");
-      return;
-    }
-    if (isTtsSpeakingRef.current) {
-      console.debug("[JanaSeva Diagnostic] TTS currently speaking, delaying listening turn");
-      return;
-    }
-    if (recognitionRunningRef.current) {
-      console.debug("[JanaSeva Diagnostic] Recognition already running, skipping start");
-      return;
-    }
+    if (!isCallActiveRef.current) return;
+    if (isTtsSpeakingRef.current) return;
+    if (recognitionRunningRef.current) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn("[JanaSeva Diagnostic] SpeechRecognition not supported in browser");
       setMicPermissionNotice("Voice recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
       setCallState("waiting_input");
       return;
     }
 
-    console.debug("[JanaSeva Diagnostic] RECOGNITION CREATED for lang:", activeCallLangRef.current);
-
     try {
       const recognition = new SpeechRecognition();
-      // Requirement 4: continuous = false, interimResults = true
+      // Requirement 3: continuous = false, interimResults = true
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
@@ -296,69 +277,73 @@ export default function VoicePage() {
       recognition.onstart = () => {
         recognitionRunningRef.current = true;
         setCallState("listening");
-        console.debug("[JanaSeva Diagnostic] RECOGNITION ONSTART");
+        console.log("[JanaSeva Voice] Recognition started");
       };
 
       recognition.onresult = (event) => {
         let interim = "";
         let final = "";
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const seg = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            final += seg;
+        // Requirement 4: Iterate through all relevant results
+        for (let i = 0; i < event.results.length; ++i) {
+          const res = event.results[i];
+          if (!res || !res[0]) continue;
+          const seg = res[0].transcript || "";
+          if (res.isFinal) {
+            final += (final ? " " : "") + seg;
           } else {
-            interim += seg;
+            interim += (interim ? " " : "") + seg;
           }
         }
 
-        console.debug("[JanaSeva Diagnostic] RECOGNITION ONRESULT interim:", interim, "final:", final);
+        const candidate = (final ? final + (interim ? " " : "") + interim : interim).trim();
+        capturedFinalRef.current = (final || candidate).trim();
+        console.log("[JanaSeva Voice] Raw result:", candidate);
 
-        if (final) {
-          capturedFinalRef.current = (capturedFinalRef.current + " " + final).trim();
-          console.debug("[JanaSeva Diagnostic] RAW TRANSCRIPT:", capturedFinalRef.current);
-        }
-
-        const display = (capturedFinalRef.current + " " + interim).trim();
-        if (display) {
-          setLiveTranscript(display);
+        if (candidate) {
+          setLiveTranscript(candidate);
         }
       };
 
       recognition.onerror = (event) => {
-        console.debug("[JanaSeva Diagnostic] RECOGNITION ONERROR:", event.error);
+        console.error("[JanaSeva Voice ERROR] recognition error:", event.error);
         if (event.error === "not-allowed" || event.error === "permission-denied") {
-          setMicPermissionNotice("Microphone permission is required for voice conversation. You can use the text box below as a test option.");
+          setMicPermissionNotice("Microphone permission is required for voice conversation. Please allow microphone access or use the text input.");
           setCallState("waiting_input");
         }
       };
 
       recognition.onend = () => {
         recognitionRunningRef.current = false;
-        console.debug("[JanaSeva Diagnostic] RECOGNITION ONEND");
-
         if (!isCallActiveRef.current) return;
+        // Requirement 5: Prevent duplicate submissions
         if (hasSubmittedTurnRef.current) return;
 
-        const finalSpeech = (capturedFinalRef.current || liveTranscript || "").trim();
+        const finalSpeech = (capturedFinalRef.current || "").replace(/\s+/g, " ").trim();
         setLiveTranscript("");
 
         if (finalSpeech.length > 0) {
           hasSubmittedTurnRef.current = true;
-          console.debug("[JanaSeva Diagnostic] FINAL TRANSCRIPT:", finalSpeech);
+          console.log("[JanaSeva Voice] Final transcript:", finalSpeech);
           processUserSpeechTurn(finalSpeech);
         } else {
-          console.debug("[JanaSeva Diagnostic] No final speech recognized in turn");
-          setMicPermissionNotice("We couldn't hear you. Please try again.");
+          console.log("[JanaSeva Voice] Empty transcript received");
+          const silenceMsg = activeCallLangRef.current.startsWith("hi")
+            ? "क्षमा करें, आपकी बात समझ नहीं आई। कृपया दोबारा कहें।"
+            : activeCallLangRef.current.startsWith("ta")
+            ? "மன்னிக்கவும், உங்கள் பேச்சு தெளிவாக புரியவில்லை. மீண்டும் சொல்லுங்கள்."
+            : activeCallLangRef.current.startsWith("en")
+            ? "Sorry, I couldn't understand that. Please say it again."
+            : "Sorry, mee maatlu sarigga ardham kaaledu. Mallee konchem clear ga cheppandi.";
+          setMicPermissionNotice(silenceMsg);
           setCallState("waiting_input");
         }
       };
 
-      console.debug("[JanaSeva Diagnostic] RECOGNITION STARTED");
       recognition.start();
     } catch (err) {
       recognitionRunningRef.current = false;
-      console.warn("[JanaSeva Diagnostic] SpeechRecognition start exception:", err);
+      console.error("[JanaSeva Voice ERROR] recognition error:", err);
       if (err.name !== "InvalidStateError") {
         setCallState("waiting_input");
       }
@@ -367,7 +352,7 @@ export default function VoicePage() {
 
   const processUserSpeechTurn = async (userText) => {
     if (!userText || !userText.trim()) return;
-    const cleanText = userText.trim();
+    const cleanText = userText.replace(/\s+/g, " ").trim();
 
     setCallLogs(prev => [
       ...prev,
@@ -381,8 +366,7 @@ export default function VoicePage() {
     setMicPermissionNotice("");
     setCallState("processing");
 
-    console.debug("[JanaSeva Diagnostic] AI REQUEST START:", cleanText);
-    console.debug("[JanaSeva] FINAL TRANSCRIPT:", cleanText);
+    console.log("[JanaSeva Voice] AI request:", cleanText);
 
     try {
       const controller = new AbortController();
@@ -405,12 +389,13 @@ export default function VoicePage() {
       }
 
       const data = await response.json();
-      console.debug("[JanaSeva Diagnostic] AI RESPONSE RECEIVED:", data);
+      console.log("[JanaSeva Voice] AI response:", data.response);
 
       if (data && data.response) {
         if (data.detectedLanguage) {
           activeCallLangRef.current = data.detectedLanguage;
           setDetectedLanguage(data.detectedLanguage);
+          console.log("[JanaSeva Voice] Detected language:", data.detectedLanguage);
         }
 
         if (data.recommendations && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
@@ -442,14 +427,14 @@ export default function VoicePage() {
         throw new Error("No response field received from AI service");
       }
     } catch (err) {
-      console.warn("[JanaSeva Diagnostic] AI request error:", err);
+      console.error("[JanaSeva Voice ERROR] AI request error:", err);
       const fallbackMsg = activeCallLangRef.current.startsWith("hi")
-        ? "माफ़ कीजिए, आपकी बात समझने में समस्या आई। कृपया दोबारा कहें।"
+        ? "क्षमा करें, आपकी बात समझ नहीं आई। कृपया दोबारा कहें।"
         : activeCallLangRef.current.startsWith("ta")
-        ? "மன்னிக்கவும், தகவலைப் பெறுவதில் சிக்கல். மீண்டும் கூறவும்."
+        ? "மன்னிக்கவும், உங்கள் பேச்சு தெளிவாக புரியவில்லை. மீண்டும் சொல்லுங்கள்."
         : activeCallLangRef.current.startsWith("en")
-        ? "I am sorry, I had trouble processing that. Could you please repeat?"
-        : "క్షమించండి, మీ ప్రశ్నను అర్థం చేసుకోవడంలో చిన్న సమస్య వచ్చింది. దయచేసి మళ్లీ చెప్పండి.";
+        ? "Sorry, I couldn't understand that. Please say it again."
+        : "Sorry, mee maatlu sarigga ardham kaaledu. Mallee konchem clear ga cheppandi.";
 
       setCallLogs(prev => [
         ...prev,
@@ -522,7 +507,7 @@ export default function VoicePage() {
     } catch (err) {
       console.warn("[JanaSeva Diagnostic] MIC PERMISSION RESULT: denied/unavailable", err);
       micGranted = false;
-      setMicPermissionNotice("Microphone permission is required for voice conversation. You can use the text box below as a test option.");
+      setMicPermissionNotice("Microphone permission is required for voice conversation. Please allow microphone access or use the text input.");
     }
 
     const greeting = WELCOME_GREETINGS[initialLang] || WELCOME_GREETINGS["te-IN"];
