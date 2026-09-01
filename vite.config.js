@@ -1,6 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import dotenv from "dotenv";
+import {
+  handleIncomingCall,
+  handleProcessSpeech,
+  handleEndCall,
+  handleSimulationTurn
+} from "./backend/services/phoneVoiceService.js";
+import { phoneSessionManager } from "./backend/services/phoneSessionManager.js";
 
 dotenv.config();
 
@@ -237,6 +244,122 @@ const localApiPlugin = () => ({
             res.statusCode = 500;
             return res.end(JSON.stringify({ error: err.message }));
           }
+        }
+
+        // Phone Voice: Incoming Call Webhook
+        if (url.pathname === "/api/voice/incoming") {
+          try {
+            const protocol = req.headers["x-forwarded-proto"] || "http";
+            const host = req.headers.host || "localhost:5174";
+            const webhookUrl = `${protocol}://${host}/api/voice/process`;
+
+            const providerResponse = await handleIncomingCall({
+              body,
+              webhookUrl,
+              provider: process.env.PHONE_PROVIDER
+            });
+
+            res.setHeader("Content-Type", providerResponse.contentType || "text/xml");
+            return res.end(providerResponse.body);
+          } catch (err) {
+            res.statusCode = 500;
+            return res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+
+        // Phone Voice: Speech Processing & Voice Loop Webhook
+        if (url.pathname === "/api/voice/process") {
+          try {
+            const protocol = req.headers["x-forwarded-proto"] || "http";
+            const host = req.headers.host || "localhost:5174";
+            const webhookUrl = `${protocol}://${host}/api/voice/process`;
+
+            const providerResponse = await handleProcessSpeech({
+              body,
+              webhookUrl,
+              provider: process.env.PHONE_PROVIDER
+            });
+
+            res.setHeader("Content-Type", providerResponse.contentType || "text/xml");
+            return res.end(providerResponse.body);
+          } catch (err) {
+            res.statusCode = 500;
+            return res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+
+        // Phone Voice: Call Termination Webhook
+        if (url.pathname === "/api/voice/end") {
+          try {
+            res.setHeader("Content-Type", "application/json");
+            const callId = body.CallSid || body.callId || "";
+            const session = handleEndCall(callId);
+            return res.end(JSON.stringify({
+              status: "success",
+              message: "Call session ended",
+              callId,
+              duration: session?.duration || 0
+            }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            return res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+
+        // Phone Voice: Health Check & Provider Status
+        if (url.pathname === "/api/voice/health") {
+          res.setHeader("Content-Type", "application/json");
+          const groqKey = process.env.GROQ_API_KEY;
+          const openaiKey = process.env.OPENAI_API_KEY;
+          const googleKey = process.env.GOOGLE_API_KEY;
+          const phoneProvider = process.env.PHONE_PROVIDER || (process.env.TWILIO_ACCOUNT_SID ? "twilio" : "mock");
+          const phoneNumber = process.env.PHONE_NUMBER || "Demo Helpline (Simulator Active)";
+
+          const sttProvider = groqKey ? "Groq Whisper (Turbo)" : openaiKey ? "OpenAI Whisper" : googleKey ? "Google Cloud STT" : "Browser Web Speech Fallback";
+          const llmProvider = groqKey ? "Groq LLaMA 3.3 70B" : openaiKey ? "OpenAI GPT-4o-mini" : "JanaSeva Local Dialog Engine";
+          const ttsProvider = googleKey ? "Google Cloud TTS (Multilingual)" : "Telephony Native Say (<Say>)";
+
+          return res.end(JSON.stringify({
+            status: "healthy",
+            service: "JanaSeva Voice Phone Call AI",
+            timestamp: new Date().toISOString(),
+            configuration: {
+              phoneProvider,
+              phoneNumber,
+              sttProvider,
+              llmProvider,
+              ttsProvider,
+              webhookConfigured: Boolean(process.env.PHONE_WEBHOOK_URL),
+              webhookSecretConfigured: Boolean(process.env.PHONE_WEBHOOK_SECRET)
+            },
+            supportedLanguages: ["te-IN (Telugu)", "hi-IN (Hindi)", "ta-IN (Tamil)", "en-IN (English)"],
+            analytics: phoneSessionManager.getAnalytics()
+          }));
+        }
+
+        // Phone Voice: Local Development Simulator Endpoint
+        if (url.pathname === "/api/voice/test") {
+          try {
+            res.setHeader("Content-Type", "application/json");
+            const { callId, text, language } = body;
+            const result = await handleSimulationTurn({
+              callId,
+              text: (text || "").trim(),
+              language: language || "te-IN"
+            });
+            return res.end(JSON.stringify(result));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            return res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+
+        // Phone Voice: Analytics for Admin Dashboard
+        if (url.pathname === "/api/voice/analytics") {
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify(phoneSessionManager.getAnalytics()));
         }
 
         res.statusCode = 404;

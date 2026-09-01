@@ -11,6 +11,7 @@ import Logo from "../components/Logo";
 export default function HomePage() {
   const {
     setPage,
+    setVoiceTab,
     selectedState,
     setSelectedState,
     seniorMode,
@@ -182,11 +183,31 @@ export default function HomePage() {
               onClick={() => alert("Calling Official Senior Citizen Helpline — 14567")}
             >
               <PhoneCall size={24} />
-              <span>📞 Call Helpline 14567</span>
+              <span>📞 Call Official Helpline 14567</span>
             </a>
-            <div className="small text-secondary text-center" style={{ marginTop: "-8px", fontSize: "12px", fontWeight: "700" }}>
-              Official Senior Citizen Helpline — 14567
-            </div>
+
+            {/* 4b. CALL JANA SEVA AI SIMULATOR */}
+            <button 
+              type="button" 
+              className="senior-big-btn" 
+              style={{ 
+                width: "100%", 
+                margin: "0", 
+                background: "#0284c7", 
+                color: "white", 
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px"
+              }}
+              onClick={() => {
+                if (setVoiceTab) setVoiceTab("phone_call");
+                setPage("voice");
+              }}
+            >
+              <PhoneCall size={24} />
+              <span>🎙️ Call JanaSeva AI</span>
+            </button>
 
             {/* 5. FEEDBACK */}
             {voice.response && !seniorFbSubmitted && (
@@ -252,20 +273,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Main Helpline Banner */}
-      <div className="card p-3 mb-4 text-center border-warning" style={{ background: "#fef8e6", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-        <div style={{ textAlign: "left" }}>
-          <strong style={{ fontSize: "16px" }}>👵 Official Senior Citizen Helpline</strong>
-          <div className="text-secondary small">National official support line for elder queries.</div>
+      {/* Main Helpline Banner & Call JanaSeva AI Section */}
+      <div className="card p-3 mb-4 border-warning" style={{ background: "#fef8e6", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "14px" }}>
+        <div style={{ textAlign: "left", flex: "1 1 300px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "20px" }}>📞</span>
+            <strong style={{ fontSize: "17px", color: "#92400e" }}>Call JanaSeva — AI Voice Call</strong>
+          </div>
+          <p className="text-secondary small mt-1 mb-0" style={{ fontSize: "13px", lineHeight: "1.4" }}>
+            Voice assistance available in <b>Telugu, Hindi, Tamil, and English</b>.
+          </p>
         </div>
-        <a 
-          href="tel:14567" 
-          className="primary" 
-          style={{ background: "#16a34a", textDecoration: "none", color: "white", display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px" }}
-          onClick={() => alert("Calling Official Senior Citizen Helpline — 14567")}
-        >
-          <PhoneCall size={16} /> <b>Call 14567</b>
-        </a>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="primary"
+            style={{ background: "#16a34a", padding: "10px 18px", borderRadius: "8px", fontSize: "14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+            onClick={() => {
+              if (setVoiceTab) setVoiceTab("phone_call");
+              setPage("voice");
+            }}
+          >
+            <PhoneCall size={16} /> <b>🎙️ Try Call Simulator</b>
+          </button>
+        </div>
       </div>
 
       {/* Universal Search Bar */}

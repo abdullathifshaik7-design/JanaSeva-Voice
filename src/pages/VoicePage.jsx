@@ -1,19 +1,57 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
 import { getConversationContext, speakText } from "../services/voiceService";
 import VoiceButton from "../components/VoiceButton";
 import VoiceWaveform from "../components/VoiceWaveform";
 import { VOICE_STATES } from "../services/voiceService";
-import { Volume2, RefreshCw, MapPin, PhoneCall, PhoneOff, Check, AlertCircle, Link, Upload, Eye } from "lucide-react";
+import { 
+  Volume2, RefreshCw, MapPin, PhoneCall, PhoneOff, Check, 
+  AlertCircle, Link, Upload, Eye, Mic, MicOff, HelpCircle, RotateCcw 
+} from "lucide-react";
 import DemoNote from "../components/DemoNote";
 
+const CALL_LANG_MAP = {
+  "te-IN": { code: "te", name: "Telugu", native: "తెలుగు", flag: "🇮🇳" },
+  "hi-IN": { code: "hi", name: "Hindi", native: "हिंदी", flag: "🇮🇳" },
+  "ta-IN": { code: "ta", name: "Tamil", native: "தமிழ்", flag: "🇮🇳" },
+  "en-IN": { code: "en", name: "English", native: "English", flag: "🇬🇧" }
+};
+
+const SILENCE_PROMPTS = {
+  "te-IN": "మీరు ఏమీ చెప్పలేదు. దయచేసి మళ్లీ చెప్పండి.",
+  "hi-IN": "आपने कुछ नहीं कहा। कृपया दोबारा बोलें।",
+  "ta-IN": "நீங்கள் எதுவும் பேசவில்லை. தயவுசெய்து மீண்டும் பேசுங்கள்.",
+  "en-IN": "I didn't hear anything. Please speak again."
+};
+
+const WELCOME_GREETINGS = {
+  "te-IN": "నమస్కారం! జనసేవ వాయిస్ హెల్ప్‌లైన్‌కు స్వాగతం. మీకు ఏ ప్రభుత్వ పథకం లేదా సమస్య గురించి సమాచారం కావాలి? మీరు తెలుగు, హిందీ, తమిళం లేదా ఇంగ్లీషులో మాట్లాడవచ్చు.",
+  "hi-IN": "नमस्ते! जनसेवा वॉयस हेल्पलाइन में आपका स्वागत है। आपको किस सरकारी योजना या शिकायत के बारे में जानकारी चाहिए? आप हिंदी, तेलुगु, तमिल या अंग्रेजी में बोल सकते हैं।",
+  "ta-IN": "வணக்கம்! ஜனசேவா குரல் உதவி மையத்திற்கு உங்களை வரவேற்கிறோம். உங்களுக்கு எந்த அரசு திட்டம் அல்லது புகார் குறித்து உதவி தேவை? நீங்கள் தமிழ், தெலுங்கு, இந்தி அல்லது ஆங்கிலத்தில் பேசலாம்.",
+  "en-IN": "Hello and welcome to JanaSeva Voice Helpline! How can I assist you with government schemes or grievances today? You can speak naturally in Telugu, Hindi, Tamil, or English."
+};
+
+function toCallLocale(lang) {
+  if (!lang) return "te-IN";
+  if (lang.startsWith("te")) return "te-IN";
+  if (lang.startsWith("hi")) return "hi-IN";
+  if (lang.startsWith("ta")) return "ta-IN";
+  return "en-IN";
+}
+
 export default function VoicePage() {
-  const { language, t, addFeedback, addApplication, user } = useApp();
+  const { language, t, addFeedback, addApplication, user, voiceTab, setVoiceTab } = useApp();
   const voice = useVoiceAssistant();
   const context = getConversationContext();
 
-  const [activeTab, setActiveTab] = useState("assistant"); // 'assistant' or 'phone_call'
+  const [activeTab, setActiveTab] = useState(voiceTab || "assistant"); // 'assistant' or 'phone_call'
+
+  useEffect(() => {
+    if (voiceTab) {
+      setActiveTab(voiceTab);
+    }
+  }, [voiceTab]);
 
   // Feedback states
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(true);
@@ -22,18 +60,35 @@ export default function VoicePage() {
   const [commentVal, setCommentVal] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  // Phone Call Simulator States
+  // Phone Call Simulator States (Voice-First Engine)
   const [callActive, setCallActive] = useState(false);
+  const [callState, setCallState] = useState("idle"); // 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'waiting_input' | 'ended'
   const [callDuration, setCallDuration] = useState(0);
-  const [callStage, setCallStage] = useState(1);
   const [callLogs, setCallLogs] = useState([]);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [detectedLanguage, setDetectedLanguage] = useState("te-IN");
+  const [micPermissionNotice, setMicPermissionNotice] = useState("");
+  const [customCallInput, setCustomCallInput] = useState("");
+
+  // Handshake / scanner modal state
+  const [callStage, setCallStage] = useState(1);
   const [phoneAppScannerOpen, setPhoneAppScannerOpen] = useState(false);
   const [phoneScanFile, setPhoneScanFile] = useState(null);
   const [phoneFileDetected, setPhoneFileDetected] = useState("");
   const [phoneFieldVal, setPhoneFieldVal] = useState("");
-  const [isSpeakingCall, setIsSpeakingCall] = useState(false);
 
-  // Chat message feed logs state
+  // Refs for tracking telephony state & avoiding race conditions
+  const isCallActiveRef = useRef(false);
+  const callSessionIdRef = useRef(`call_${Date.now()}`);
+  const activeCallLangRef = useRef("te-IN");
+  const recognitionRef = useRef(null);
+  const recognitionRunningRef = useRef(false);
+  const isTtsSpeakingRef = useRef(false);
+  const hasSubmittedTurnRef = useRef(false);
+  const capturedFinalRef = useRef("");
+  const chatFeedRef = useRef(null);
+
+  // Chat message feed logs state (for assistant tab)
   const [messages, setMessages] = useState([]);
 
   useEffect(() => {
@@ -61,6 +116,13 @@ export default function VoicePage() {
     }
   }, [voice.response]);
 
+  // Auto-scroll call conversation turns
+  useEffect(() => {
+    if (chatFeedRef.current) {
+      chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+    }
+  }, [callLogs, liveTranscript, callState]);
+
   // Timer for active calls
   useEffect(() => {
     let interval = null;
@@ -74,80 +136,401 @@ export default function VoicePage() {
     return () => clearInterval(interval);
   }, [callActive]);
 
-  const speakCallAgent = async (text) => {
-    setIsSpeakingCall(true);
-    // Log agent utterance
-    setCallLogs(prev => [...prev, { sender: "agent", text }]);
-    await speakText(text, language);
-    setIsSpeakingCall(false);
-  };
-
-  const startPhoneCall = async () => {
-    setCallActive(true);
-    setCallStage(1);
-    setCallLogs([]);
-    setPhoneAppScannerOpen(false);
-    setPhoneScanFile(null);
-    setPhoneFieldVal("");
-
-    const welcomes = {
-      en: "Welcome to JanaSeva Voice Helpline. How can we help you today? Speak or tell us what service you need.",
-      te: "జనసేవ వాయిస్ హెల్ప్‌లైన్‌కు స్వాగతం. ఈరోజు మేము మీకు ఎలా సహాయం చేయగలము? మీకు ఏ సేవ కావాలో చెప్పండి.",
-      hi: "जनसेवा वॉयस हेल्पलाइन में आपका स्वागत है। आज हम आपकी क्या सहायता कर सकते हैं? बताएं आपको किस सेवा की आवश्यकता है।",
-      ta: "ஜனசேவா குரல் உதவி மையத்திற்கு உங்களை வரவேற்கிறோம். இன்று நாங்கள் உங்களுக்கு எவ்வாறு உதவ முடியும்?"
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      isCallActiveRef.current = false;
+      if (recognitionRef.current && recognitionRunningRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+        recognitionRunningRef.current = false;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        isTtsSpeakingRef.current = false;
+      }
     };
+  }, []);
 
-    setTimeout(() => {
-      speakCallAgent(welcomes[language] || welcomes.en);
-    }, 1000);
+  // Direct Browser SpeechSynthesis with queue cancellation and explicit language mapping
+  const speakWithBrowserTTS = (text, langCode) => {
+    return new Promise((resolve) => {
+      if (!text || typeof text !== "string" || !text.trim()) {
+        console.debug("[JanaSeva Diagnostic] TTS SKIPPED (empty text)");
+        return resolve({ spoken: false });
+      }
+
+      if (!window.speechSynthesis) {
+        console.warn("[JanaSeva Diagnostic] speechSynthesis not available");
+        return resolve({ spoken: false });
+      }
+
+      // Cancel any queued utterances to avoid blocking
+      window.speechSynthesis.cancel();
+
+      console.debug("[JanaSeva Diagnostic] TTS START. Lang:", langCode, "Text:", text.substring(0, 40) + "...");
+      isTtsSpeakingRef.current = true;
+      setCallState("speaking");
+
+      const utterance = new SpeechSynthesisUtterance(text.trim());
+
+      let targetLang = "en-IN";
+      if (langCode?.startsWith("te")) targetLang = "te-IN";
+      else if (langCode?.startsWith("hi")) targetLang = "hi-IN";
+      else if (langCode?.startsWith("ta")) targetLang = "ta-IN";
+      else if (langCode?.startsWith("en")) targetLang = "en-IN";
+
+      utterance.lang = targetLang;
+      utterance.rate = 0.9;
+
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        isTtsSpeakingRef.current = false;
+        console.debug("[JanaSeva Diagnostic] TTS END");
+        resolve({ spoken: true });
+      };
+
+      utterance.onstart = () => {
+        console.debug("[JanaSeva Diagnostic] TTS ONSTART");
+      };
+
+      utterance.onend = () => {
+        console.debug("[JanaSeva Diagnostic] TTS ONEND");
+        finish();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("[JanaSeva Diagnostic] TTS ONERROR:", e.error);
+        finish();
+      };
+
+      // Safety timeout in case browser TTS stalls
+      const words = text.trim().split(/\s+/).length;
+      const maxTimeout = Math.max(6000, words * 600);
+      setTimeout(() => {
+        if (!finished) {
+          console.debug("[JanaSeva Diagnostic] TTS safety timer expired");
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+          finish();
+        }
+      }, maxTimeout);
+
+      window.speechSynthesis.speak(utterance);
+    });
   };
 
   const endPhoneCall = () => {
+    isCallActiveRef.current = false;
     setCallActive(false);
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setCallState("ended");
+    setLiveTranscript("");
+    hasSubmittedTurnRef.current = false;
+    capturedFinalRef.current = "";
+
+    if (recognitionRef.current && recognitionRunningRef.current) {
+      try {
+        recognitionRef.current.onstart = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRunningRef.current = false;
+    }
+    recognitionRef.current = null;
+
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      isTtsSpeakingRef.current = false;
+    }
+
+    fetch("/api/voice/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: callSessionIdRef.current })
+    }).catch(() => {});
+  };
+
+  const startListeningTurn = () => {
+    if (!isCallActiveRef.current) {
+      console.debug("[JanaSeva Diagnostic] Call not active, skipping listening turn");
+      return;
+    }
+    if (isTtsSpeakingRef.current) {
+      console.debug("[JanaSeva Diagnostic] TTS currently speaking, delaying listening turn");
+      return;
+    }
+    if (recognitionRunningRef.current) {
+      console.debug("[JanaSeva Diagnostic] Recognition already running, skipping start");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("[JanaSeva Diagnostic] SpeechRecognition not supported in browser");
+      setMicPermissionNotice("Voice recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
+      setCallState("waiting_input");
+      return;
+    }
+
+    console.debug("[JanaSeva Diagnostic] RECOGNITION CREATED for lang:", activeCallLangRef.current);
+
+    try {
+      const recognition = new SpeechRecognition();
+      // Requirement 4: continuous = false, interimResults = true
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.lang = activeCallLangRef.current || "te-IN";
+      recognitionRef.current = recognition;
+
+      capturedFinalRef.current = "";
+      hasSubmittedTurnRef.current = false;
+      setLiveTranscript("");
+
+      recognition.onstart = () => {
+        recognitionRunningRef.current = true;
+        setCallState("listening");
+        console.debug("[JanaSeva Diagnostic] RECOGNITION ONSTART");
+      };
+
+      recognition.onresult = (event) => {
+        let interim = "";
+        let final = "";
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const seg = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += seg;
+          } else {
+            interim += seg;
+          }
+        }
+
+        console.debug("[JanaSeva Diagnostic] RECOGNITION ONRESULT interim:", interim, "final:", final);
+
+        if (final) {
+          capturedFinalRef.current = (capturedFinalRef.current + " " + final).trim();
+          console.debug("[JanaSeva Diagnostic] RAW TRANSCRIPT:", capturedFinalRef.current);
+        }
+
+        const display = (capturedFinalRef.current + " " + interim).trim();
+        if (display) {
+          setLiveTranscript(display);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.debug("[JanaSeva Diagnostic] RECOGNITION ONERROR:", event.error);
+        if (event.error === "not-allowed" || event.error === "permission-denied") {
+          setMicPermissionNotice("Microphone permission is required for voice conversation. You can use the text box below as a test option.");
+          setCallState("waiting_input");
+        }
+      };
+
+      recognition.onend = () => {
+        recognitionRunningRef.current = false;
+        console.debug("[JanaSeva Diagnostic] RECOGNITION ONEND");
+
+        if (!isCallActiveRef.current) return;
+        if (hasSubmittedTurnRef.current) return;
+
+        const finalSpeech = (capturedFinalRef.current || liveTranscript || "").trim();
+        setLiveTranscript("");
+
+        if (finalSpeech.length > 0) {
+          hasSubmittedTurnRef.current = true;
+          console.debug("[JanaSeva Diagnostic] FINAL TRANSCRIPT:", finalSpeech);
+          processUserSpeechTurn(finalSpeech);
+        } else {
+          console.debug("[JanaSeva Diagnostic] No final speech recognized in turn");
+          setMicPermissionNotice("We couldn't hear you. Please try again.");
+          setCallState("waiting_input");
+        }
+      };
+
+      console.debug("[JanaSeva Diagnostic] RECOGNITION STARTED");
+      recognition.start();
+    } catch (err) {
+      recognitionRunningRef.current = false;
+      console.warn("[JanaSeva Diagnostic] SpeechRecognition start exception:", err);
+      if (err.name !== "InvalidStateError") {
+        setCallState("waiting_input");
+      }
+    }
+  };
+
+  const processUserSpeechTurn = async (userText) => {
+    if (!userText || !userText.trim()) return;
+    const cleanText = userText.trim();
+
+    setCallLogs(prev => [
+      ...prev,
+      {
+        sender: "user",
+        text: cleanText,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      }
+    ]);
+    setLiveTranscript("");
+    setMicPermissionNotice("");
+    setCallState("processing");
+
+    console.debug("[JanaSeva Diagnostic] AI REQUEST START:", cleanText);
+    console.debug("[JanaSeva] FINAL TRANSCRIPT:", cleanText);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("/api/voice/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callId: callSessionIdRef.current,
+          text: cleanText,
+          language: activeCallLangRef.current
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`AI API returned HTTP status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.debug("[JanaSeva Diagnostic] AI RESPONSE RECEIVED:", data);
+
+      if (data && data.response) {
+        if (data.detectedLanguage) {
+          activeCallLangRef.current = data.detectedLanguage;
+          setDetectedLanguage(data.detectedLanguage);
+        }
+
+        setCallLogs(prev => [
+          ...prev,
+          {
+            sender: "agent",
+            text: data.response,
+            lang: data.detectedLanguage || activeCallLangRef.current,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          }
+        ]);
+
+        await speakWithBrowserTTS(data.response, data.detectedLanguage || activeCallLangRef.current);
+
+        if (data.isEndCall) {
+          endPhoneCall();
+        } else if (isCallActiveRef.current) {
+          startListeningTurn();
+        }
+      } else {
+        throw new Error("No response field received from AI service");
+      }
+    } catch (err) {
+      console.warn("[JanaSeva Diagnostic] AI request error:", err);
+      const fallbackMsg = activeCallLangRef.current.startsWith("hi")
+        ? "माफ़ कीजिए, आपकी बात समझने में समस्या आई। कृपया दोबारा कहें।"
+        : activeCallLangRef.current.startsWith("ta")
+        ? "மன்னிக்கவும், தகவலைப் பெறுவதில் சிக்கல். மீண்டும் கூறவும்."
+        : activeCallLangRef.current.startsWith("en")
+        ? "I am sorry, I had trouble processing that. Could you please repeat?"
+        : "క్షమించండి, మీ ప్రశ్నను అర్థం చేసుకోవడంలో చిన్న సమస్య వచ్చింది. దయచేసి మళ్లీ చెప్పండి.";
+
+      setCallLogs(prev => [
+        ...prev,
+        {
+          sender: "agent",
+          text: fallbackMsg,
+          lang: activeCallLangRef.current,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        }
+      ]);
+
+      await speakWithBrowserTTS(fallbackMsg, activeCallLangRef.current);
+      if (isCallActiveRef.current) {
+        startListeningTurn();
+      }
+    }
   };
 
   const handleSimulateUserSpeech = async (userSays) => {
-    setCallLogs(prev => [...prev, { sender: "user", text: userSays }]);
+    if (!userSays || !userSays.trim()) return;
+    const cleanText = userSays.trim();
+    setCustomCallInput("");
 
-    if (callStage === 1) {
-      setCallStage(2);
-      const responses = {
-        en: "Understood. You want to apply for the Old Age Pension. This service requires your Aadhaar Card. I am sending a secure app link to your phone now to scan it. Please click the link to continue.",
-        te: "అర్థమైంది. మీరు వృద్ధాప్య పెన్షన్ కోసం దరఖాస్తు చేయాలనుకుంటున్నారు. దీనికి మీ ఆధార్ కార్డ్ అవసరం. దాన్ని స్కాన్ చేయడానికి నేను మీ స్క్రీన్‌కు ఒక లింక్‌ను పంపుతున్నాను. దయచేసి ఆ లింక్‌ను క్లిက် చేయండి.",
-        hi: "समझ गया। आप वृद्धावस्था पेंशन के लिए आवेदन करना चाहते हैं। इसके लिए आपके आधार कार्ड की आवश्यकता होगी। इसे स्कैन करने के लिए मैं आपके फोन पर एक लिंक भेज रहा हूँ। जारी रखने के लिए लिंक पर क्लिक करें।",
-        ta: "புரிந்துகொண்டேன். முதியோர் ஓய்வூதியத்திற்கு விண்ணப்பிக்க விரும்புகிறீர்கள். இதற்கு ஆதார் அட்டை தேவை. அதை ஸ்கேன் செய்ய உங்கள் திரைக்கு ஒரு லிంக் அனுப்புகிறேன்."
-      };
-      await speakCallAgent(responses[language] || responses.en);
-    } else if (callStage === 4) {
-      if (!phoneFieldVal) {
-        await speakCallAgent("Please type your Aadhaar number in the field on the screen first.");
-        return;
+    if (recognitionRef.current && recognitionRunningRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
+      recognitionRunningRef.current = false;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      isTtsSpeakingRef.current = false;
+    }
+
+    if (!isCallActiveRef.current) {
+      isCallActiveRef.current = true;
+      setCallActive(true);
+      callSessionIdRef.current = `call_${Date.now()}`;
+      setCallLogs([]);
+      setCallDuration(0);
+      const initialLang = toCallLocale(language);
+      activeCallLangRef.current = initialLang;
+      setDetectedLanguage(initialLang);
+    }
+
+    await processUserSpeechTurn(cleanText);
+  };
+
+  const startPhoneCall = async () => {
+    console.debug("[JanaSeva Diagnostic] MIC REQUESTED");
+    isCallActiveRef.current = true;
+    setCallActive(true);
+    setCallState("connecting");
+    setCallLogs([]);
+    setLiveTranscript("");
+    setMicPermissionNotice("");
+    hasSubmittedTurnRef.current = false;
+    capturedFinalRef.current = "";
+    callSessionIdRef.current = `call_${Date.now()}`;
+
+    const initialLang = toCallLocale(language);
+    activeCallLangRef.current = initialLang;
+    setDetectedLanguage(initialLang);
+
+    let micGranted = true;
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        console.debug("[JanaSeva Diagnostic] MIC PERMISSION RESULT: granted");
       }
-      setCallStage(5);
-      const responses = {
-        en: "Excellent! Your Aadhaar number has been verified. I am now submitting your application to the Social Welfare Department. You will receive progress notifications. Thank you for calling JanaSeva Voice.",
-        te: "చాలా బాగుంది! మీ ఆధార్ నంబర్ ధృవీకరించబడింది. నేను మీ దరఖాస్తును సాంఘిక సంక్షేమ శాఖకు సమర్పిస్తున్నాను. ధన్యవాదాలు.",
-        hi: "बहुत बढ़िया! आपका आधार नंबर सत्यापित हो गया है। मैं अब आपका आवेदन समाज कल्याण विभाग को जमा कर रहा हूँ। कॉल करने के लिए धन्यवाद।",
-        ta: "மிக நன்று! உங்கள் ஆதார் எண் சரிபார்க்கப்பட்டது. உங்கள் விண்ணப்பம் சமர்ப்பிக்கப்பட்டது. அழைப்பிற்கு நன்றி."
-      };
-      
-      // Register application
-      const refId = `JSV-APP-PHN-${Math.floor(100000 + Math.random() * 900000)}`;
-      addApplication({
-        id: refId,
-        schemeId: "s-1",
-        schemeName: "NTR Bharosa Pension",
-        citizenName: user?.email || user?.phone || "Phone Helpline User",
-        status: "Submitted",
-        date: new Date().toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }),
-        timeline: [
-          { title: "Submitted via Phone Call", done: true, current: true, date: "Today" }
-        ]
-      });
+    } catch (err) {
+      console.warn("[JanaSeva Diagnostic] MIC PERMISSION RESULT: denied/unavailable", err);
+      micGranted = false;
+      setMicPermissionNotice("Microphone permission is required for voice conversation. You can use the text box below as a test option.");
+    }
 
-      await speakCallAgent(responses[language] || responses.en);
-      setTimeout(() => endPhoneCall(), 3000);
+    const greeting = WELCOME_GREETINGS[initialLang] || WELCOME_GREETINGS["te-IN"];
+    setCallLogs([
+      {
+        sender: "agent",
+        text: greeting,
+        lang: initialLang,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      }
+    ]);
+
+    await speakWithBrowserTTS(greeting, initialLang);
+
+    if (isCallActiveRef.current) {
+      if (micGranted) {
+        startListeningTurn();
+      } else {
+        setCallState("waiting_input");
+      }
     }
   };
 
@@ -159,7 +542,7 @@ export default function VoicePage() {
     setTimeout(() => {
       setPhoneFileDetected("Aadhaar Card");
       setCallStage(3);
-      speakCallAgent("I see your Aadhaar card is uploaded successfully. Now look at the 12-digit number at the front and fill it in the box on your screen, then tell me when you are done.");
+      speakWithBrowserTTS("I see your Aadhaar card is uploaded successfully. Now look at the 12-digit number at the front and fill it in the box on your screen, then tell me when you are done.", "en-IN");
     }, 1500);
   };
 
@@ -239,9 +622,9 @@ export default function VoicePage() {
             color: activeTab === "assistant" ? "#0ea5e9" : "#64748b",
             fontWeight: "700"
           }}
-          onClick={() => { setActiveTab("assistant"); endPhoneCall(); }}
+          onClick={() => { setActiveTab("assistant"); setVoiceTab("assistant"); endPhoneCall(); }}
         >
-          🗣️ Voice Assistant
+          🗣️ Web Voice Assistant
         </button>
         <button
           type="button"
@@ -254,9 +637,9 @@ export default function VoicePage() {
             color: activeTab === "phone_call" ? "#0ea5e9" : "#64748b",
             fontWeight: "700"
           }}
-          onClick={() => setActiveTab("phone_call")}
+          onClick={() => { setActiveTab("phone_call"); setVoiceTab("phone_call"); }}
         >
-          📞 Phone Call Mode
+          📞 Call JanaSeva (Phone Simulator)
         </button>
       </div>
 
@@ -419,145 +802,377 @@ export default function VoicePage() {
       {/* TAB 2: Helpline Phone Call Mode */}
       {activeTab === "phone_call" && (
         <div className="card text-center p-4">
-          <h2>📞 Helpline Call Simulator</h2>
-          <p className="card-sub">Simulate a voice call with the JanaSeva Voice helpline (14567).</p>
+          <h2 style={{ marginBottom: "6px" }}>📞 JanaSeva AI</h2>
           <hr style={{ margin: "15px 0", borderColor: "#e2e8f0" }} />
 
           {!callActive ? (
             <div className="py-4">
-              <PhoneCall size={64} className="text-success mx-auto mb-3 animate-pulse" />
-              <button type="button" className="primary" style={{ padding: "12px 24px", fontSize: "16px" }} onClick={startPhoneCall}>
-                Start Helpline Phone Call
-              </button>
+              <div style={{ maxWidth: "420px", margin: "0 auto", textAlign: "center" }}>
+                <div style={{ display: "inline-block", padding: "16px", borderRadius: "50%", background: "#f0fdf4", marginBottom: "14px" }}>
+                  <PhoneCall size={52} className="text-success" />
+                </div>
+                <p className="text-secondary small mb-4" style={{ fontSize: "15px" }}>
+                  Connect to JanaSeva Voice AI helpline using your microphone.
+                </p>
+
+                {micPermissionNotice && (
+                  <div className="card p-3 mb-3 border-warning text-left" style={{ background: "#fffbeb", borderLeft: "4px solid #f59e0b" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <AlertCircle size={18} className="text-warning" />
+                      <span style={{ fontSize: "13px", color: "#92400e", fontWeight: "600" }}>{micPermissionNotice}</span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="primary"
+                  style={{
+                    padding: "12px 32px",
+                    fontSize: "18px",
+                    borderRadius: "10px",
+                    background: "#16a34a",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    boxShadow: "0 4px 14px rgba(22, 163, 74, 0.25)",
+                    cursor: "pointer"
+                  }}
+                  onClick={startPhoneCall}
+                >
+                  <PhoneCall size={20} /> <b>Start Phone Call</b>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="animate-fade-in text-left">
-              {/* Call HUD */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "12px 20px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div className="success-icon animate-ping" style={{ background: "#22c55e", width: "12px", height: "12px", borderRadius: "50%" }} />
-                  <strong>Connected - JanaSeva Agent (14567)</strong>
+              {/* Call HUD Card */}
+              <div style={{
+                background: "#ffffff",
+                padding: "16px 20px",
+                borderRadius: "12px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                marginBottom: "16px"
+              }}>
+                {/* Top Row: Title, Connected Pill, Duration, End Call */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ position: "relative", width: "12px", height: "12px" }}>
+                      <div style={{ position: "absolute", width: "100%", height: "100%", borderRadius: "50%", background: "#22c55e" }} />
+                      <div className="animate-ping" style={{ position: "absolute", width: "100%", height: "100%", borderRadius: "50%", background: "#22c55e", opacity: 0.75 }} />
+                    </div>
+                    <strong style={{ fontSize: "16px", color: "#0f172a" }}>📞 JanaSeva AI</strong>
+                    <span className="badge" style={{ background: "#dcfce7", color: "#166534", fontSize: "11px", fontWeight: "700" }}>
+                      ● AI Connected
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ fontSize: "14px", color: "#64748b" }}>
+                      Call Duration: <strong style={{ color: "#0f172a" }}>{Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, "0")}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{
+                        background: "#fee2e2",
+                        borderColor: "#f87171",
+                        color: "#b91c1c",
+                        fontWeight: "700",
+                        padding: "6px 14px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        borderRadius: "8px"
+                      }}
+                      onClick={() => endPhoneCall()}
+                    >
+                      <PhoneOff size={16} /> 🔴 End Call
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  Time: <b>{Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, "0")}</b>
+
+                {/* Sub Row: Voice Status Badge & Detected Language */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span className="small text-secondary">Status:</span>
+                    {callState === "connecting" && (
+                      <span className="badge" style={{ background: "#fef3c7", color: "#92400e" }}>⏳ Connecting...</span>
+                    )}
+                    {callState === "listening" && (
+                      <span className="badge animate-pulse" style={{ background: "#dcfce7", color: "#15803d", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <Mic size={14} /> 🎙️ Listening... Speak naturally
+                      </span>
+                    )}
+                    {callState === "processing" && (
+                      <span className="badge animate-pulse" style={{ background: "#fef3c7", color: "#92400e", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        🧠 Understanding...
+                      </span>
+                    )}
+                    {callState === "speaking" && (
+                      <span className="badge animate-pulse" style={{ background: "#e0f2fe", color: "#0369a1", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <Volume2 size={14} /> 🔊 JanaSeva AI is speaking...
+                      </span>
+                    )}
+                    {callState === "waiting_input" && (
+                      <span className="badge" style={{ background: "#f1f5f9", color: "#475569" }}>
+                        ⏸️ Waiting for input
+                      </span>
+                    )}
+                    {callState === "ended" && (
+                      <span className="badge" style={{ background: "#fee2e2", color: "#b91c1c" }}>
+                        🔴 Call Ended
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="small text-secondary">Detected Language:</span>
+                    <span className="badge" style={{ background: "#f3e8ff", color: "#7e22ce", fontWeight: "700" }}>
+                      {CALL_LANG_MAP[detectedLanguage]?.flag || "🌐"} {CALL_LANG_MAP[detectedLanguage]?.name} ({CALL_LANG_MAP[detectedLanguage]?.native})
+                    </span>
+                  </div>
                 </div>
-                <button type="button" className="secondary-btn" style={{ color: "#ef4444", borderColor: "#fca5a5" }} onClick={endPhoneCall}>
-                  <PhoneOff size={16} /> Hang Up
-                </button>
               </div>
 
-              {/* Call conversation logs */}
-              <div style={{ margin: "20px 0", padding: "15px", background: "#f1f5f9", borderRadius: "8px", height: "250px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Permission notice if mic was blocked */}
+              {micPermissionNotice && (
+                <div className="card p-3 mb-3 border-warning text-left" style={{ background: "#fffbeb", borderLeft: "4px solid #f59e0b" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <AlertCircle size={18} className="text-warning" />
+                    <span style={{ fontSize: "13px", color: "#92400e", fontWeight: "600" }}>
+                      {micPermissionNotice}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Live User Speech Indicator Box */}
+              {callState === "listening" && (
+                <div style={{
+                  background: "#f0fdf4",
+                  border: "2px solid #86efac",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  marginBottom: "16px"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <strong style={{ color: "#166534", fontSize: "14px", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <Mic size={16} className="animate-pulse" /> 🗣️ You (speaking now):
+                    </strong>
+                    <span style={{ fontSize: "12px", color: "#15803d", fontStyle: "italic" }}>
+                      Pause speaking for ~1.8s to submit automatically
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "17px", color: "#14532d", fontWeight: "600", minHeight: "24px" }}>
+                    {liveTranscript ? `"${liveTranscript}"` : <span style={{ color: "#86efac", fontWeight: "normal" }}>Say something in Telugu, Hindi, Tamil, or English...</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversation Feed */}
+              <div
+                ref={chatFeedRef}
+                style={{
+                  margin: "12px 0 16px 0",
+                  padding: "16px",
+                  background: "#f8fafc",
+                  borderRadius: "10px",
+                  border: "1px solid #e2e8f0",
+                  maxHeight: "320px",
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px"
+                }}
+              >
                 {callLogs.map((log, idx) => (
-                  <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: log.sender === "agent" ? "flex-start" : "flex-end" }}>
-                    <span className="small text-secondary">{log.sender === "agent" ? "📞 Agent" : "🗣️ You"}</span>
-                    <div style={{
-                      padding: "8px 12px",
-                      borderRadius: "10px",
-                      background: log.sender === "agent" ? "#ffffff" : "#0ea5e9",
-                      color: log.sender === "agent" ? "#1e293b" : "#ffffff",
-                      maxWidth: "80%",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-                    }}>
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: log.sender === "agent" ? "flex-start" : "flex-end"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: log.sender === "agent" ? "#0284c7" : "#0f766e" }}>
+                        {log.sender === "agent" ? "📞 JanaSeva AI:" : "🗣️ You:"}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>{log.time}</span>
+                    </div>
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "12px",
+                        background: log.sender === "agent" ? "#ffffff" : "#0284c7",
+                        color: log.sender === "agent" ? "#1e293b" : "#ffffff",
+                        maxWidth: "85%",
+                        fontSize: "15px",
+                        lineHeight: "1.5",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                        border: log.sender === "agent" ? "1px solid #e2e8f0" : "none"
+                      }}
+                    >
                       {log.text}
                     </div>
                   </div>
                 ))}
-                {isSpeakingCall && (
-                  <p className="small text-secondary animate-pulse text-left">Agent is speaking...</p>
+
+                {callState === "processing" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#92400e", fontSize: "13px", padding: "8px" }}>
+                    <div className="animate-spin" style={{ width: "16px", height: "16px", border: "2px solid #d97706", borderTopColor: "transparent", borderRadius: "50%" }} />
+                    <span>🧠 JanaSeva AI is searching government welfare records...</span>
+                  </div>
                 )}
               </div>
 
-              {/* Interactive steps helper */}
-              <div className="card p-3 bg-light border-info">
-                <h4>Interactive Call Actions</h4>
-                <p className="small text-secondary mb-3">Perform actions based on the voice agent's verbal instructions.</p>
-
-                {callStage === 1 && (
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <button type="button" className="secondary-btn" onClick={() => handleSimulateUserSpeech("I need help with Old Age Pension")}>
-                      🗣️ Speak: "I need help with Old Age Pension"
-                    </button>
-                    <button type="button" className="secondary-btn" onClick={() => handleSimulateUserSpeech("I want to check agricultural schemes")}>
-                      🗣️ Speak: "I want agricultural schemes"
-                    </button>
-                  </div>
+              {/* Senior Citizen Quick Action Controls */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
+                {(callState === "waiting_input" || callState === "ended") && (
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ padding: "10px 18px", fontSize: "15px", display: "inline-flex", alignItems: "center", gap: "8px", background: "#16a34a" }}
+                    onClick={() => startListeningTurn()}
+                  >
+                    <Mic size={18} /> <b>🎙️ Speak Now</b>
+                  </button>
                 )}
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "10px 16px", fontSize: "14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  onClick={() => handleSimulateUserSpeech("మళ్లీ చెప్పు")}
+                >
+                  <RotateCcw size={16} /> <b>🔁 Repeat</b> ("మళ్లీ చెప్పు")
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "10px 16px", fontSize: "14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  onClick={() => handleSimulateUserSpeech("స్లోగా చెప్పు")}
+                >
+                  🐢 <b>Slow</b> ("స్లోగా చెప్పు")
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "10px 16px", fontSize: "14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  onClick={() => handleSimulateUserSpeech("సహాయం కావాలి")}
+                >
+                  <HelpCircle size={16} /> <b>❓ Help</b> ("సహాయం")
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "10px 16px", fontSize: "14px", background: "#fee2e2", borderColor: "#f87171", color: "#b91c1c", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  onClick={() => endPhoneCall()}
+                >
+                  <PhoneOff size={16} /> <b>🔴 End Call</b> ("కాల్ ఎండ్ చెయ్యి")
+                </button>
+              </div>
 
-                {callStage === 2 && (
-                  <div>
-                    <div className="demo-note success-note mb-3 text-left" style={{ background: "#e0f2fe", color: "#0369a1" }}>
-                      <strong>🔗 Secure Scan Link Sent</strong>
-                      <p className="small">The agent has pushed a secure link to verify your documents.</p>
+              {/* Fallback Testing Section */}
+              <div className="card p-3 bg-light border-info text-left">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <h4 style={{ margin: 0, fontSize: "14px", color: "#0369a1" }}>⌨️ Type to test without microphone</h4>
+                  <span className="small text-secondary">Fallback / Testing option</span>
+                </div>
+                <p className="small text-secondary mb-3">
+                  Click any sample inquiry or type text below to test multilingual conversation without speaking:
+                </p>
+
+                {/* Quick Utterance Chips */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("రైతులకు ప్రభుత్వం ఏ పథకాలు ఇస్తుంది?")}>
+                    🌾 <b>Telugu:</b> రైతులకు పథకాలు
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("Na pension status gurinchi telusukovali.")}>
+                    👵 <b>Telugu:</b> పెన్షన్ వివరాలు
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("मुझे पेंशन के बारे में जानकारी चाहिए")}>
+                    🇮🇳 <b>Hindi:</b> पेंशन योजना
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("எனக்கு ஓய்வூதியம் பற்றி தெரிந்து கொள்ள வேண்டும்")}>
+                    🇮🇳 <b>Tamil:</b> ஓய்வூதியம்
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("What government schemes are available for farmers?")}>
+                    🇬🇧 <b>English:</b> Farmer Schemes
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px", background: "#fef2f2", borderColor: "#fca5a5" }} onClick={() => handleSimulateUserSpeech("Na pension issue undi complaint ivvali.")}>
+                    📢 <b>Grievance:</b> ఫిర్యాదు నమోదు
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px" }} onClick={() => handleSimulateUserSpeech("మళ్లీ చెప్పు")}>
+                    🔁 <b>Repeat:</b> మళ్లీ చెప్పు
+                  </button>
+                  <button type="button" className="secondary-btn" style={{ fontSize: "12px", padding: "6px 12px", background: "#fee2e2", borderColor: "#f87171", color: "#b91c1c" }} onClick={() => handleSimulateUserSpeech("కాల్ ఎండ్ చెయ్యి")}>
+                    🚪 <b>End:</b> కాల్ ఎండ్ చెయ్యి
+                  </button>
+                </div>
+
+                {/* Custom Speech Input Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (customCallInput.trim()) {
+                      handleSimulateUserSpeech(customCallInput.trim());
+                    }
+                  }}
+                  style={{ display: "flex", gap: "8px" }}
+                >
+                  <input
+                    type="text"
+                    value={customCallInput}
+                    onChange={(e) => setCustomCallInput(e.target.value)}
+                    placeholder="Type any inquiry in Telugu, Hindi, Tamil, or English..."
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                  />
+                  <button type="submit" className="primary" style={{ padding: "8px 16px", fontSize: "13px" }}>
+                    Send Inquiry
+                  </button>
+                </form>
+              </div>
+
+              {/* Handshake / Secure Scan Window helper preserved */}
+              {phoneAppScannerOpen && callStage < 5 && (
+                <div className="card mt-3 p-3 border text-left bg-white">
+                  <h3>📷 Camera / Gallery Document Scan</h3>
+                  <p className="small text-secondary mb-3">Secure verification link: <code>https://janaseva.gov.in/verify/handshake</code></p>
+                  
+                  {!phoneScanFile ? (
+                    <div style={{ position: "relative" }}>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        id="call-file-upload" 
+                        style={{ display: "none" }}
+                        onChange={handlePhoneFileUpload} 
+                      />
+                      <label 
+                        htmlFor="call-file-upload"
+                        style={{ display: "flex", flexDirection: "column", gap: "8px", border: "2px dashed #cbd5e1", borderRadius: "8px", padding: "20px", cursor: "pointer", textAlign: "center" }}
+                      >
+                        <Upload size={24} className="mx-auto text-secondary" />
+                        <span>Choose Aadhaar Card Photo</span>
+                      </label>
                     </div>
-                    <button 
-                      type="button" 
-                      className="primary"
-                      onClick={() => setPhoneAppScannerOpen(true)}
-                    >
-                      <Link size={16} /> Open Secure App Scan Window
-                    </button>
-                  </div>
-                )}
+                  ) : (
+                    <div className="demo-note success-note" style={{ background: "#f0fdf4", color: "#166534" }}>
+                      <strong>✓ Document detected: {phoneFileDetected}</strong>
+                      <p className="small">Information has been successfully bridged to the call agent session.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-                {/* Handshake: Mock Scanner App Modal */}
-                {phoneAppScannerOpen && callStage < 5 && (
-                  <div className="card mt-3 p-3 border text-left bg-white">
-                    <h3>📷 Camera / Gallery Document Scan</h3>
-                    <p className="small text-secondary mb-3">Secure verification link: <code>https://janaseva.gov.in/verify/handshake</code></p>
-                    
-                    {!phoneScanFile ? (
-                      <div style={{ position: "relative" }}>
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          id="call-file-upload" 
-                          style={{ display: "none" }}
-                          onChange={handlePhoneFileUpload} 
-                        />
-                        <label 
-                          htmlFor="call-file-upload"
-                          style={{ display: "flex", flexDirection: "column", gap: "8px", border: "2px dashed #cbd5e1", borderRadius: "8px", padding: "20px", cursor: "pointer", textAlign: "center" }}
-                        >
-                          <Upload size={24} className="mx-auto text-secondary" />
-                          <span>Choose Aadhaar Card Photo</span>
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="demo-note success-note" style={{ background: "#f0fdf4", color: "#166534" }}>
-                        <strong>✓ Document detected: {phoneFileDetected}</strong>
-                        <p className="small">Information has been successfully bridged to the call agent session.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {callStage === 3 && (
-                  <div className="mt-3 text-left">
-                    <label>Aadhaar 12-Digit Number</label>
-                    <input 
-                      type="text" 
-                      value={phoneFieldVal} 
-                      onChange={(e) => setPhoneFieldVal(e.target.value)} 
-                      placeholder="Enter 12 digits"
-                    />
-                    <button 
-                      type="button" 
-                      className="primary mt-2" 
-                      onClick={() => { setCallStage(4); handleSimulateUserSpeech("I have entered my Aadhaar ID number"); }}
-                    >
-                      Confirm Entry Completed
-                    </button>
-                  </div>
-                )}
-
-                {callStage === 5 && (
-                  <div className="demo-note success-note text-left" style={{ background: "#f0fdf4", color: "#166534" }}>
-                    <strong>✓ Call Finished & Application Submitted!</strong>
-                    <p className="small">The agent has successfully submitted your registration. You can track this in your profile history.</p>
-                  </div>
-                )}
-              </div>
+              {callStage === 5 && (
+                <div className="demo-note success-note text-left mt-3" style={{ background: "#f0fdf4", color: "#166534" }}>
+                  <strong>✓ Call Finished & Application Submitted!</strong>
+                  <p className="small">The agent has successfully submitted your registration. You can track this in your profile history.</p>
+                </div>
+              )}
             </div>
           )}
         </div>

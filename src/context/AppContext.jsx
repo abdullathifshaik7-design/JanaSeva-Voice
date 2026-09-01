@@ -32,6 +32,7 @@ const INITIAL_COMPLAINTS = [
 
 export function AppProvider({ children }) {
   const [page, setPage] = useState("home");
+  const [voiceTab, setVoiceTab] = useState("assistant");
   const [activeScheme, setActiveScheme] = useState(null);
   const [user, setUserState] = useState(() => {
     try {
@@ -372,6 +373,8 @@ export function AppProvider({ children }) {
   const value = {
     page,
     setPage,
+    voiceTab,
+    setVoiceTab,
     activeScheme,
     setActiveScheme,
     user,
