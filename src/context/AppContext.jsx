@@ -85,9 +85,11 @@ export function AppProvider({ children }) {
       await authService.signOut();
     } catch (e) {}
     setUserState(null);
+    setUserProfileState(null);
     setIsGuestState(false);
     try {
       localStorage.removeItem("janaseva_user");
+      localStorage.removeItem("janaseva_user_profile");
       localStorage.removeItem("janaseva_is_guest");
     } catch (e) {}
     setPage("login");
@@ -125,18 +127,22 @@ export function AppProvider({ children }) {
   const [userProfile, setUserProfileState] = useState(() => {
     try {
       const saved = localStorage.getItem("janaseva_user_profile");
-      return saved ? JSON.parse(saved) : { state: "Andhra Pradesh", district: "", ageGroup: "Adult (26-59)", profession: "Farmer", incomeCategory: "BPL" };
+      return saved ? JSON.parse(saved) : null;
     } catch (e) {
-      return { state: "Andhra Pradesh", district: "", ageGroup: "Adult (26-59)", profession: "Farmer", incomeCategory: "BPL" };
+      return null;
     }
   });
 
   const setUserProfile = (val) => {
     setUserProfileState(val);
     try {
-      localStorage.setItem("janaseva_user_profile", JSON.stringify(val));
+      if (val) {
+        localStorage.setItem("janaseva_user_profile", JSON.stringify(val));
+      } else {
+        localStorage.removeItem("janaseva_user_profile");
+      }
     } catch (e) {}
-    if (user) {
+    if (user && val) {
       supabaseService.saveProfile(user.id, val);
     }
   };
@@ -237,11 +243,15 @@ export function AppProvider({ children }) {
       }
 
       if (user) {
-        const dbProfile = await supabaseService.fetchProfile(user.id);
-        if (dbProfile) {
-          console.log("DB SYNC: User profile synced from Supabase.");
-          setUserProfileState(dbProfile);
-          try { localStorage.setItem("janaseva_user_profile", JSON.stringify(dbProfile)); } catch(e) {}
+        try {
+          const dbProfile = await supabaseService.fetchProfile(user.id);
+          if (dbProfile) {
+            console.log("DB SYNC: User profile synced from Supabase.");
+            setUserProfileState(dbProfile);
+            try { localStorage.setItem("janaseva_user_profile", JSON.stringify(dbProfile)); } catch(e) {}
+          }
+        } catch (e) {
+          console.warn("Could not sync user profile from Supabase:", e);
         }
       }
     }

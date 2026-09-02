@@ -341,19 +341,22 @@ export const supabaseService = {
 
   // Save profile
   async saveProfile(userId, profile) {
+    if (!profile) return false;
     try {
       if (isSupabaseConfigured) {
         await supabase.auth.updateUser({
           data: {
-            fullName: profile.fullName,
-            mobileNumber: profile.mobileNumber,
-            email: profile.email,
-            state: profile.state,
-            district: profile.district,
-            age: profile.age,
-            profession: profile.profession,
-            preferredLanguage: profile.preferredLanguage,
-            address: profile.address
+            fullName: profile.fullName || "",
+            mobileNumber: profile.mobileNumber || "",
+            email: profile.email || "",
+            state: profile.state || "",
+            district: profile.district || "",
+            age: profile.age ? String(profile.age) : "",
+            profession: profile.profession || "",
+            income: profile.income || "",
+            incomeCategory: profile.incomeCategory || profile.income || "",
+            preferredLanguage: profile.preferredLanguage || "en",
+            address: profile.address || ""
           }
         });
       }
@@ -365,11 +368,11 @@ export const supabaseService = {
     try {
       const { error } = await supabase.from("users").upsert([{
         id: userId,
-        state: profile.state,
-        district: profile.district,
-        age_group: String(profile.age),
-        profession: profile.profession,
-        income_category: profile.incomeCategory || "BPL"
+        state: profile.state || "",
+        district: profile.district || "",
+        age_group: profile.age ? String(profile.age) : (profile.ageGroup || ""),
+        profession: profile.profession || "",
+        income_category: profile.incomeCategory || profile.income || ""
       }]);
       return !error;
     } catch (e) {
@@ -385,15 +388,17 @@ export const supabaseService = {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && user.user_metadata) {
         authProfile = {
-          fullName: user.user_metadata.fullName,
-          mobileNumber: user.user_metadata.mobileNumber,
-          email: user.user_metadata.email || user.email,
-          state: user.user_metadata.state,
-          district: user.user_metadata.district,
-          age: user.user_metadata.age,
-          profession: user.user_metadata.profession,
-          preferredLanguage: user.user_metadata.preferredLanguage,
-          address: user.user_metadata.address
+          fullName: user.user_metadata.fullName || "",
+          mobileNumber: user.user_metadata.mobileNumber || "",
+          email: user.user_metadata.email || user.email || "",
+          state: user.user_metadata.state || "",
+          district: user.user_metadata.district || "",
+          age: user.user_metadata.age || "",
+          profession: user.user_metadata.profession || "",
+          income: user.user_metadata.income || user.user_metadata.incomeCategory || "",
+          incomeCategory: user.user_metadata.incomeCategory || user.user_metadata.income || "",
+          preferredLanguage: user.user_metadata.preferredLanguage || "en",
+          address: user.user_metadata.address || ""
         };
       }
     } catch (e) {}
@@ -401,16 +406,25 @@ export const supabaseService = {
     try {
       const { data, error } = await supabase.from("users").select("*").eq("id", userId).single();
       if (error) throw error;
-      return {
+      const merged = {
         ...authProfile,
-        state: data.state || authProfile?.state,
-        district: data.district || authProfile?.district,
-        ageGroup: data.age_group || authProfile?.age,
-        profession: data.profession || authProfile?.profession,
-        incomeCategory: data.income_category
+        fullName: authProfile?.fullName || data.full_name || data.name || "",
+        mobileNumber: authProfile?.mobileNumber || data.mobile || data.phone || "",
+        email: authProfile?.email || "",
+        state: data.state || authProfile?.state || "",
+        district: data.district || authProfile?.district || "",
+        age: authProfile?.age || data.age || data.age_group || "",
+        ageGroup: data.age_group || authProfile?.age || "",
+        profession: data.profession || authProfile?.profession || "",
+        incomeCategory: data.income_category || authProfile?.incomeCategory || "",
+        income: authProfile?.income || data.income_category || data.income || ""
       };
+      return (merged.fullName || merged.mobileNumber || merged.state) ? merged : null;
     } catch (e) {
-      return authProfile || null;
+      if (authProfile && (authProfile.fullName || authProfile.mobileNumber || authProfile.state)) {
+        return authProfile;
+      }
+      return null;
     }
   }
 };
